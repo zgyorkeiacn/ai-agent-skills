@@ -31,6 +31,8 @@ Structured templates for handing off work between AI agents or human developers.
 
 ### Automatic Installation (Recommended)
 
+**Standalone Installation:**
+
 **Windows (PowerShell):**
 ```powershell
 git clone https://github.com/zgyorkei/ai-agent-skills.git
@@ -44,6 +46,19 @@ git clone https://github.com/zgyorkei/ai-agent-skills.git
 cd ai-agent-skills
 chmod +x install.sh
 ./install.sh
+```
+
+**As Part of Gherkin Sandbox:**
+
+If you cloned [gherkin-sandbox](https://github.com/zgyorkei/gherkin-sandbox), the skills are already included as a submodule:
+
+```powershell
+# Clone with submodules
+git clone --recursive https://github.com/zgyorkei/gherkin-sandbox.git
+cd gherkin-sandbox
+
+# Run setup wizard and select option 7
+.\setup-wizard.ps1
 ```
 
 The installer will:
