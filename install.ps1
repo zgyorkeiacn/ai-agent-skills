@@ -25,9 +25,10 @@ Write-Host "  AI Agent Skills Installer" -ForegroundColor Magenta
 Write-Host "═══════════════════════════════════════════════" -ForegroundColor Magenta
 Write-Host ""
 
-# Detect available skills
+# Detect available skills (exclude standalone skills)
+$ExcludeSkills = @("copilot-instructions-installer")
 $Skills = Get-ChildItem -Path $SkillsRepoPath -Directory | Where-Object { 
-    Test-Path (Join-Path $_.FullName "SKILL.md")
+    (Test-Path (Join-Path $_.FullName "SKILL.md")) -and ($_.Name -notin $ExcludeSkills)
 }
 
 if ($Skills.Count -eq 0) {

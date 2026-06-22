@@ -25,6 +25,23 @@ Structured templates for handing off work between AI agents or human developers.
 
 [📖 Full Documentation](agent-handoff/SKILL.md)
 
+### ⚡ copilot-instructions-installer (Standalone Tool)
+Installs optimized GitHub Copilot instructions to enforce token efficiency and code quality.
+
+**This is a standalone tool** - run directly, no installation needed:
+```bash
+cd copilot-instructions-installer
+node install.js
+```
+
+**Key Features:**
+- Cuts token waste by 30-50%
+- Enforces diff-based code outputs
+- Prevents autonomous loops
+- Cross-platform (Windows/Mac/Linux)
+
+[📖 Full Documentation](copilot-instructions-installer/README.md)
+
 ---
 
 ## 🚀 Quick Start

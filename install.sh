@@ -53,11 +53,16 @@ echo -e "${MAGENTA}  AI Agent Skills Installer${NC}"
 echo -e "${MAGENTA}═══════════════════════════════════════════════${NC}"
 echo ""
 
-# Detect available skills
+# Detect available skills (exclude standalone skills)
+EXCLUDE_SKILLS=("copilot-instructions-installer")
 SKILLS=()
 for dir in "$SKILLS_REPO_PATH"/*; do
     if [[ -d "$dir" && -f "$dir/SKILL.md" ]]; then
-        SKILLS+=("$(basename "$dir")")
+        skill_name="$(basename "$dir")"
+        # Check if skill is in exclude list
+        if [[ ! " ${EXCLUDE_SKILLS[@]} " =~ " ${skill_name} " ]]; then
+            SKILLS+=("$skill_name")
+        fi
     fi
 done
 

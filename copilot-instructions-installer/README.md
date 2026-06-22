@@ -1,15 +1,22 @@
 # Copilot Instructions Installer
 
+**Standalone tool** - no installation or git required. Just run with Node.js.
+
 Hyper-lightweight cross-platform installer for GitHub Copilot optimization instructions.
 
 ## Quick Start
 
 ```bash
-cd c:\newgit\skills\copilot-instructions-installer
+# Navigate to this folder
+cd copilot-instructions-installer
+
+# Run the installer
 node install.js
 ```
 
 Follow the prompts, then reload VS Code window to activate.
+
+**No dependencies required** - works with native Node.js (v12+) on any platform.
 
 ## What It Does
 
