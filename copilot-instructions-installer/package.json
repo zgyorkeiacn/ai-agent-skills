@@ -1,0 +1,25 @@
+{
+  "name": "copilot-instructions-installer",
+  "version": "1.0.0",
+  "description": "Cross-platform installer for optimized GitHub Copilot instructions",
+  "main": "install.js",
+  "bin": {
+    "install-copilot-instructions": "./install.js"
+  },
+  "scripts": {
+    "install-here": "node install.js",
+    "test": "node install.js --help"
+  },
+  "keywords": [
+    "github-copilot",
+    "copilot",
+    "instructions",
+    "token-efficiency",
+    "vscode"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=12.0.0"
+  }
+}
