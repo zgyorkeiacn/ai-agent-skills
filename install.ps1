@@ -115,6 +115,16 @@ if ($Uninstall) {
         }
     }
     
+    # Run skill-level uninstallers
+    foreach ($skill in $Skills) {
+        $installer = Join-Path $skill.FullName "install.ps1"
+        if (Test-Path $installer) {
+            $skillName = $skill.Name
+            Write-Host "  [$skillName] uninstalling..." -ForegroundColor Cyan
+            try { & $installer -Uninstall } catch { Write-Warning "Uninstaller for $skillName failed: $_" }
+        }
+    }
+
     Write-Host ""
     if ($removed -gt 0) {
         Write-Success "Uninstalled $removed symlink(s)"
@@ -168,6 +178,26 @@ foreach ($system in $AgentSystems) {
                     Write-Error "Failed to link $($skill.Name): $_"
                 }
             }
+        }
+    }
+}
+
+# Run skill-level installers (install.ps1 inside each skill directory)
+$skillInstallers = $Skills | ForEach-Object {
+    $installer = Join-Path $_.FullName "install.ps1"
+    if (Test-Path $installer) { $installer }
+}
+
+if ($skillInstallers) {
+    Write-Host ""
+    Write-Info "Running skill-level installers..."
+    foreach ($installer in $skillInstallers) {
+        $skillName = Split-Path (Split-Path $installer -Parent) -Leaf
+        Write-Host "  [$skillName]" -ForegroundColor Cyan
+        try {
+            & $installer
+        } catch {
+            Write-Warning "Installer for $skillName failed: $_"
         }
     }
 }
