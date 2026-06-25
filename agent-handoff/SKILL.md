@@ -1,6 +1,7 @@
 ---
 name: agent-handoff
 description: Establishes a two-document handoff system (AGENT_CONTEXT.md + implementation_plan.md) that makes any project fully resumable by any agent at any point, without needing to read the codebase. Automatically triggered on plan mode entry/exit and on todo completion via hooks. Apply manually at project start or when onboarding a new agent to an existing project.
+user-invocable: true
 ---
 
 # Agent Handoff Skill
