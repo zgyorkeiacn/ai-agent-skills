@@ -62,7 +62,7 @@ The installed instructions enforce:
 ### Token Efficiency Rules
 - Direct answers only, no filler
 - Tables for structured data
-- Hyphen (`-`) instead of em-dash (`—`)
+- Hyphen (`-`) instead of em-dash (`-`)
 - No prompt repetition
 
 ### Code Output Rules

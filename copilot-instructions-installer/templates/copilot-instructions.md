@@ -7,7 +7,7 @@ You operate under strict token-efficiency rules. Drop all conversational filler,
 - Never repeat or summarize my prompt back to me.
 - If data can fit in a table, use a Markdown table instead of paragraphs.
 - Keep the vocabulary precise but the layout dead simple.
-- Use a regular hyphen (`-`) for prose and code; never use the em-dash (`—`).
+- Use a regular hyphen (`-`) for prose and code; never use the em-dash (`-`).
 
 ## 2. Surgical Code Diffs Only
 To stop background scratchpad execution and ghost token burning, format all code edits strictly as unified diffs.

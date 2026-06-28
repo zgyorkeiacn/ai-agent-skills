@@ -21,7 +21,7 @@ Hook scripts live in `~/.claude/scripts/`:
 - `on-exit-plan-mode.ps1`
 - `on-todo-write.ps1`
 
-The Enter/Exit hooks fire a hidden `pwsh` process and return immediately — plan mode is not delayed. Sub-agent logs land in `%TEMP%\claude-handoff-enter.log` / `claude-handoff-exit.log`.
+The Enter/Exit hooks fire a hidden `pwsh` process and return immediately - plan mode is not delayed. Sub-agent logs land in `%TEMP%\claude-handoff-enter.log` / `claude-handoff-exit.log`.
 
 **Note:** `ExitPlanMode` fires when the plan is *presented*, not when the user clicks Approve. If the plan is rejected and revised, the next `ExitPlanMode` call overwrites with the updated content.
 

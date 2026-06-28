@@ -302,7 +302,7 @@ For each qualifying submodule (non-feature branch):
 
 ## Rules
 
-- **No em-dash**: never use `—`; use a regular hyphen `-` in all generated Markdown.
+- **No em-dash**: never use `-`; use a regular hyphen `-` in all generated Markdown.
 - **Relative links**: index table file cells use relative Markdown links from the repo root
   (`[src/foo.ts](src/foo.ts)`), never absolute Windows paths.
 - **Role column**: plain text, max ~80 chars. Describe the WHAT, not the HOW.

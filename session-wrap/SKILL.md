@@ -257,7 +257,7 @@ archive/ files are kept indefinitely (permanent record).
 
 ## Rules
 
-- **No em-dash**: never use `—`; use a regular hyphen `-`.
+- **No em-dash**: never use `-`; use a regular hyphen `-`.
 - **Synthesise, do not copy**: summaries must be written fresh from memory, not copied from
   conversation turns.
 - **Idempotent CLAUDE.md patch**: never add the session-wrap block more than once.

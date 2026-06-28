@@ -323,7 +323,7 @@ For each qualifying submodule (non-feature branch):
 
 ## Rules
 
-- **No em-dash**: never use `—`; always a regular hyphen `-`.
+- **No em-dash**: never use `-`; always a regular hyphen `-`.
 - **Diffs, not rewrites**: use `Edit` for targeted changes. Never `Write` the whole file unless
   the doc does not yet exist (first-time structured creation).
 - **Truthfulness**: never invent capabilities that do not exist in the current source. If unsure
