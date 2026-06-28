@@ -80,7 +80,16 @@ git rev-parse --short HEAD
 ```
 git diff {base-sha} HEAD --name-only
 ```
-If `{base-sha}` equals HEAD, all docs are current - skip to Step 5.
+If `{base-sha}` equals HEAD, all docs are current - but still check for uncommitted changes
+(see below) before skipping to Step 5.
+
+Also detect uncommitted changes that have not yet been committed:
+```
+git diff HEAD --name-only
+git diff --cached --name-only
+```
+Merge all three lists (deduplicated) before checking trigger files. A file that appears only
+in the uncommitted lists is still counted as a trigger for staleness.
 
 Use the resulting file list to check each structured doc against its trigger files:
 - `AGENT_MODULE_INDEX.md`: stale if any path starting with `src/` appears in the diff.
@@ -133,6 +142,10 @@ This doc has two structured sections that must stay in sync with source:
 ### Step 6 - Report
 List every doc touched with: doc name, action taken (updated N rows / skipped).
 
+### Step 7 - Process submodules
+If `.gitmodules` exists at the repo root, run the **Submodule Phase** (see
+`## Submodule discovery` below) after the root repo docs are processed.
+
 ---
 
 ## Mode 1F: Full audit (`/update-docs full`)
@@ -171,7 +184,9 @@ For each stale narrative doc (after processing stale structured docs per Step 4)
 - Do NOT expand narrative sections beyond what is needed to reflect the change - preserve existing
   prose style and density.
 
-Then run Step 5 (write `.docs-verified-sha`, clean up `.docs-stale`) and Step 6 (report).
+Then run Step 5 (write `.docs-verified-sha`, clean up `.docs-stale`), Step 6 (report),
+and Step 7 (process submodules, same as Mode 1 Step 7 but passing `full` into each
+submodule's run).
 
 ---
 
@@ -262,6 +277,47 @@ section or equivalent):
 
 ### Step 7 - Report
 List: which hooks were installed (or skipped), the `.gitignore` change, and the CLAUDE.md suggestion.
+
+---
+
+## Submodule discovery
+
+Applies when `.gitmodules` exists at the repo root (referenced by Mode 1 Step 7 and
+Mode 1F's equivalent step).
+
+1. Run `git submodule status` at the repo root.
+   Parse each line: `[+- ]<SHA> <path> [(<ref>)]`
+2. For each submodule path:
+   a. Get current branch: `git -C <path> rev-parse --abbrev-ref HEAD`
+   b. Skip if the branch starts with `feature/`. Report:
+      `[submodule: <path>] skipped - feature/ branch`
+3. "Changed files" for a qualifying submodule combines three sources (deduplicated):
+   a. Committed since last check:
+      `git -C <path> diff <base-sha> HEAD --name-only 2>/dev/null`
+      (omit if `<submodule>/.docs-verified-sha` does not exist)
+   b. Unstaged: `git -C <path> diff HEAD --name-only`
+   c. Staged:   `git -C <path> diff --cached --name-only`
+
+For each qualifying submodule (non-feature branch):
+
+4. Check for `docs/` directory inside the submodule. If absent, skip:
+   `[submodule: <path>] skipped - no docs/ directory`
+
+5. Determine registry type:
+   - If `<submodule>/docs/AGENT_MODULE_INDEX.md` exists: full registry applies.
+     Run Mode 1 (or Mode 1F if the parent invocation was `full`) for this submodule,
+     treating the submodule root as the repo root. Base-sha comes from
+     `<submodule>/.docs-verified-sha` (absent = first-run, treat all docs stale).
+   - Otherwise: no known registry - skip update-docs for this submodule.
+     (Its source index is handled by /index-codebase.)
+     Report: `[submodule: <path>] skipped - no AGENT_MODULE_INDEX.md registry`
+
+6. For full-registry submodules, use the merged changed-files list from step 3 as the
+   trigger list (instead of `git diff {base-sha} HEAD`). Run Mode 1 Steps 3-5 scoped to
+   the submodule root. After processing, write `<submodule>/.docs-verified-sha` with the
+   submodule's current HEAD SHA.
+
+7. Report: `[submodule: <path>] <result summary>` for each submodule processed.
 
 ---
 

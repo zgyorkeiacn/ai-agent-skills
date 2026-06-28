@@ -138,6 +138,11 @@ If `.codebase-index-stale` exists at the repo root, delete it.
 ### Step 10 - Report
 State: output file path, total source files indexed, SHA recorded, line count of generated file.
 
+### Step 11 - Process submodules
+If `.gitmodules` exists at the repo root, run the **Submodule Phase** (see
+`## Submodule discovery` below) after the root index is written. For each qualifying
+submodule, run Mode 1 Steps 1-9 scoped to the submodule root.
+
 ---
 
 ## Mode 2: Incremental Refresh (`/index-codebase refresh`)
@@ -160,7 +165,16 @@ git diff {sha} HEAD --name-only --diff-filter=A  # added
 git diff {sha} HEAD --name-only --diff-filter=D  # deleted
 ```
 
-Filter each list to source file extensions only (same patterns as Mode 1 Step 4).
+Also detect uncommitted (working tree) changes - these count as modified even before a commit:
+
+```sh
+git diff HEAD --name-only          # unstaged changes
+git diff --cached --name-only      # staged changes
+```
+
+Merge all lists (committed + uncommitted), deduplicate, and filter to source file extensions
+(same patterns as Mode 1 Step 4). Files that appear only in the uncommitted lists are treated
+as "modified" for row updates; they do not affect the SHA tracking line.
 
 ### Step 3 - Early exit
 If no modified, added, or deleted source files: report "index is up to date (SHA: {sha})" and stop.
@@ -193,6 +207,11 @@ Delete `.codebase-index-stale` if present.
 
 ### Step 9 - Report
 State: counts of updated/added/removed rows, old SHA -> new SHA.
+
+### Step 10 - Process submodules
+If `.gitmodules` exists at the repo root, run the **Submodule Phase** (see
+`## Submodule discovery` below) after the root index is refreshed. For each qualifying
+submodule, run Mode 2 Steps 1-9 scoped to the submodule root.
 
 ---
 
@@ -240,6 +259,44 @@ section or equivalent):
 
 ### Step 7 - Report
 List: which hooks were installed (or skipped), the `.gitignore` change, and the CLAUDE.md suggestion.
+
+---
+
+## Submodule discovery
+
+Applies when `.gitmodules` exists at the repo root (referenced by Mode 1 Step 11 and
+Mode 2 Step 10).
+
+1. Run `git submodule status` at the repo root.
+   Parse each line: `[+- ]<SHA> <path> [(<ref>)]`
+2. For each submodule path:
+   a. Get current branch: `git -C <path> rev-parse --abbrev-ref HEAD`
+   b. Skip if the branch starts with `feature/`. Report:
+      `[submodule: <path>] skipped - feature/ branch`
+3. "Changed files" for a qualifying submodule combines three sources (deduplicated):
+   a. Committed since last check:
+      `git -C <path> diff <base-sha> HEAD --name-only 2>/dev/null`
+      (omit if no base-sha exists for this submodule's index)
+   b. Unstaged: `git -C <path> diff HEAD --name-only`
+   c. Staged:   `git -C <path> diff --cached --name-only`
+   Filter each list to source file extensions (same patterns as Mode 1 Step 4) before merging.
+
+For each qualifying submodule (non-feature branch):
+
+4. Detect source root: look for `src/`, `lib/`, `app/`, `main/` inside the submodule root.
+   If none found, skip: `[submodule: <path>] skipped - no source root`
+
+5. Determine existing index:
+   - Check `<submodule>/docs/CODEBASE_INDEX.md`, then `<submodule>/CODEBASE_INDEX.md`.
+   - If neither exists: run Mode 1 Steps 1-9 with the submodule root as the working directory.
+     Write the index to `<submodule>/docs/` if that directory exists, else to the submodule root.
+   - If an index exists: read its SHA line to get base-sha. Collect changed files per step 3.
+     If no changes: report `[submodule: <path>] up to date (SHA: <sha>)` and skip.
+     If changes exist: run Mode 2 Steps 4-8 with the submodule root as working directory.
+     Uncommitted files (from `git diff HEAD` / `git diff --cached`) are included in the
+     modified/added file lists for row updates.
+
+6. Report: `[submodule: <path>] <result summary>` for each submodule processed.
 
 ---
 
