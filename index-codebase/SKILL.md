@@ -135,6 +135,62 @@ Embed the result in: `_Last verified against commit \`{SHA}\`_`
 ### Step 9 - Clean up stale marker
 If `.codebase-index-stale` exists at the repo root, delete it.
 
+### Step 9a - Inject navigation rule
+
+After cleaning up the stale marker, inject a "Codebase navigation" rule block into AI tool
+config files so every AI tool reads CODEBASE_INDEX.md before planning or implementing.
+
+**Locate available indexes:**
+Collect all `CODEBASE_INDEX.md` paths relative to the repo root (root index + any submodule
+indexes already present on disk, e.g. `services/agent/docs/CODEBASE_INDEX.md`). Format as a
+Markdown bullet list.
+
+**Guard marker:** The rule block is wrapped in HTML comment markers:
+`<!-- index-codebase:navigation-rule -->` ... `<!-- index-codebase:navigation-rule:end -->`
+
+Before injecting, search each target file for the opening marker:
+- If marker is **absent**: append the rule block to the end of the file (add a blank line first).
+- If marker is **present**: compare the index list inside against the current list; `Edit` the
+  block in place if the list changed. Skip if already up to date.
+
+**Rule block template** (CLAUDE.md, GEMINI.md, copilot-instructions.md):
+```
+<!-- index-codebase:navigation-rule -->
+## Codebase navigation
+Before planning or implementing any change, read the relevant CODEBASE_INDEX.md to
+identify which files need modification. Available indexes:
+- `{path/to/CODEBASE_INDEX.md}`
+- (one bullet per index found)
+<!-- index-codebase:navigation-rule:end -->
+```
+
+**Target files and actions:**
+
+| File | Condition | Action |
+|------|-----------|--------|
+| `CLAUDE.md` | Always | Create if absent; append/update rule block |
+| `GEMINI.md` | Always | Create if absent; append/update rule block |
+| `.github/copilot-instructions.md` | Only if `.github/` dir exists | Create file with rule block if absent; append/update if present |
+| `.cursor/rules/codebase-navigation.mdc` | Only if `.cursor/` dir exists | Create `rules/` dir and file if absent; update if marker found |
+
+**`.cursor/rules/codebase-navigation.mdc` format** (no HTML comments - use YAML frontmatter):
+```
+---
+description: Read CODEBASE_INDEX.md before planning or implementing any change
+alwaysApply: true
+---
+## Codebase navigation
+Before planning or implementing any change, read the relevant CODEBASE_INDEX.md to
+identify which files need modification. Available indexes:
+- `{path/to/CODEBASE_INDEX.md}`
+```
+For Cursor files, detect staleness by checking if the `description:` frontmatter line is present
+and if the index list matches current paths.
+
+**Submodule scope:** When Step 9a runs inside a submodule context (called from Submodule
+discovery), scope injection to the submodule root - update that submodule's `CLAUDE.md`,
+`GEMINI.md`, `.github/copilot-instructions.md`, and `.cursor/rules/` if they exist.
+
 ### Step 10 - Report
 State: output file path, total source files indexed, SHA recorded, line count of generated file.
 
@@ -204,6 +260,12 @@ from `git rev-parse --short HEAD`.
 
 ### Step 8 - Clean up stale marker
 Delete `.codebase-index-stale` if present.
+
+### Step 8a - Inject navigation rule
+Run the same logic as Mode 1 Step 9a, scoped to the current repo root. Collect all
+CODEBASE_INDEX.md paths on disk (root + submodule indexes) and update/create the rule block
+in CLAUDE.md, GEMINI.md, `.github/copilot-instructions.md`, and `.cursor/rules/` as described
+in Mode 1 Step 9a.
 
 ### Step 9 - Report
 State: counts of updated/added/removed rows, old SHA -> new SHA.
@@ -288,7 +350,7 @@ For each qualifying submodule (non-feature branch):
 
 5. Determine existing index:
    - Check `<submodule>/docs/CODEBASE_INDEX.md`, then `<submodule>/CODEBASE_INDEX.md`.
-   - If neither exists: run Mode 1 Steps 1-9 with the submodule root as the working directory.
+   - If neither exists: run Mode 1 Steps 1-9a with the submodule root as the working directory.
      Write the index to `<submodule>/docs/` if that directory exists, else to the submodule root.
    - If an index exists: read its SHA line to get base-sha. Collect changed files per step 3.
      If no changes: report `[submodule: <path>] up to date (SHA: <sha>)` and skip.

@@ -1,13 +1,39 @@
 ---
 name: repo-dependency-analysis
 description: 'Analyze and track dependencies between interconnected repositories (monorepos, multi-repo projects). Use for: detecting ripple effects when changing shared interfaces, finding cross-repo data flow, validating multi-repo changes, dependency mapping, impact analysis, cross-repository refactoring planning.'
-argument-hint: 'Optional: repo paths or "refresh" to re-analyze'
+argument-hint: 'Optional: "refresh", "status", or --diff-file <path> for targeted analysis'
 user-invocable: true
 ---
 
 # Cross-Repository Dependency Analysis
 
 Analyzes connection points, data flow, and dependencies between interconnected code repositories to predict and manage ripple effects when making changes.
+
+## Installation
+
+Run the installer once to configure your repositories and register the auto-crosscheck hook:
+
+```powershell
+.\install.ps1              # full interactive setup: configure repos + install hook
+.\install.ps1 add          # add a repository to config
+.\install.ps1 remove       # remove a repository from config
+.\install.ps1 list         # show configured repositories
+.\install.ps1 -Uninstall   # remove hook (config preserved)
+```
+
+After install, restart Claude Code for the hook to take effect.
+
+## Auto-Crosscheck
+
+When all todos complete in a session whose working directory is under a configured repository, a background sub-agent automatically runs this skill to surface ripple effects in other repos.
+
+The hook:
+1. Captures a git diff snapshot (`--unified=3 HEAD`) from the active repo
+2. Extracts changed files, exported symbols, env keys, API endpoints, and package versions
+3. Passes the snapshot to `detect-ripple-effects.js --diff-file` for targeted analysis
+4. Spawns a hidden `claude` process to report any CRITICAL or WARNING impacts
+
+A 30-minute debounce prevents repeated fires in the same session. Analysis log: `%TEMP%\claude-repo-dep-analysis.log`.
 
 ## When to Use
 
@@ -69,14 +95,14 @@ I'll analyze dependencies between your repositories. Please provide:
 
 **After collecting inputs:**
 1. Run [analyze-repos.js](./scripts/analyze-repos.js) to scan repos
-2. Generate `.analysis-cache/repo-map.json` (dependency graph)
-3. Generate `.analysis-cache/connection-report.md` (human-readable)
+2. Generate `~/.claude/repo-dependency-cache/repo-map.json` (dependency graph)
+3. Generate `~/.claude/repo-dependency-cache/connection-report.md` (human-readable)
 4. Display summary to user with connection count
 
 ### 2. View Current Analysis
 
 When user asks "show dependencies" or "status":
-- Load `.analysis-cache/connection-report.md`
+- Load `~/.claude/repo-dependency-cache/connection-report.md`
 - Display formatted output
 - Show last scan timestamp
 
@@ -91,7 +117,7 @@ When user says "refresh" or after detecting repo structure changes:
 
 When user asks "will this break other repos?" or before committing:
 1. Run [detect-ripple-effects.js](./scripts/detect-ripple-effects.js)
-2. Compare current working tree against baseline
+2. If a `--diff-file` snapshot is available, use it for targeted symbol-level analysis; otherwise fall back to `git status`
 3. Identify changed interfaces:
    - Modified package.json exports
    - Changed TypeScript interfaces
@@ -203,7 +229,7 @@ See [report template](./references/report-template.md) for full format.
 
 ## Configuration
 
-Stored in `.analysis-cache/config.json`:
+Managed by `install.ps1` and stored at `~/.claude/repo-dependency-config.json`:
 
 ```json
 {
@@ -211,8 +237,7 @@ Stored in `.analysis-cache/config.json`:
     {
       "name": "gherkin-sandbox",
       "path": "c:/newgit/gherkin-sandbox",
-      "type": "orchestration",
-      "primary": true
+      "type": "orchestration"
     }
   ],
   "trackDependencies": {
@@ -231,12 +256,15 @@ Stored in `.analysis-cache/config.json`:
 }
 ```
 
+Generated cache artifacts are written to `~/.claude/repo-dependency-cache/`.
+```
+
 ## Workflow Implementation
 
 When the skill is invoked, follow this decision tree:
 
-1. **Check if config exists** (`.analysis-cache/config.json`)
-   - **No**: Run initial setup → collect repo paths → analyze → save config
+1. **Check if config exists** (`~/.claude/repo-dependency-config.json`)
+   - **No**: Run initial setup → collect repo paths → analyze → save config (or direct user to `.\install.ps1`)
    - **Yes**: Continue to step 2
 
 2. **Parse user intent** from argument or context:
@@ -247,7 +275,7 @@ When the skill is invoked, follow this decision tree:
 
 3. **Execute appropriate script**:
    - Setup/Refresh: `node scripts/analyze-repos.js`
-   - Impact check: `node scripts/detect-ripple-effects.js`
+   - Impact check: `node scripts/detect-ripple-effects.js [--diff-file <snapshot.json>]`
 
 4. **Format and present results**:
    - Use tables for repo overview

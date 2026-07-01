@@ -1,31 +1,10 @@
 ---
-name: agent-handoff
-description: Establishes a two-document handoff system (AGENT_CONTEXT.md + implementation_plan.md) that makes any project fully resumable by any agent at any point, without needing to read the codebase. Automatically triggered on plan mode entry/exit and on todo completion via hooks. Apply manually at project start or when onboarding a new agent to an existing project.
+name: handoff-setup
+description: Establishes a two-document handoff system (AGENT_CONTEXT.md + implementation_plan.md) that makes any project fully resumable by any agent at any point, without needing to read the codebase. Apply manually at project start or when onboarding a new agent to an existing project.
 user-invocable: true
 ---
 
-# Agent Handoff Skill
-
-## Automation (hooks)
-
-This skill is wired into three Claude Code `PostToolUse` hooks in `~/.claude/settings.json`. No manual invocation is needed for the triggers below.
-
-| Trigger | Hook fires on | What happens |
-|---|---|---|
-| Plan mode opens | `EnterPlanMode` | Background sub-agent generates/refreshes `AGENT_CONTEXT.md` and a skeleton `implementation_plan.md` |
-| Plan mode exits | `ExitPlanMode` | Background sub-agent reads the latest plan file and incorporates its phases/tasks into `implementation_plan.md` |
-| Todo item completed | `TodoWrite` | PowerShell script diffs the todo list, fuzzy-matches completed items to `- [ ]` lines in `implementation_plan.md`, stamps them `[x] (timestamp)`, and updates the `Last Updated` field |
-
-Hook scripts live in `~/.claude/scripts/`:
-- `on-enter-plan-mode.ps1`
-- `on-exit-plan-mode.ps1`
-- `on-todo-write.ps1`
-
-The Enter/Exit hooks fire a hidden `pwsh` process and return immediately - plan mode is not delayed. Sub-agent logs land in `%TEMP%\claude-handoff-enter.log` / `claude-handoff-exit.log`.
-
-**Note:** `ExitPlanMode` fires when the plan is *presented*, not when the user clicks Approve. If the plan is rejected and revised, the next `ExitPlanMode` call overwrites with the updated content.
-
----
+# Handoff Setup Skill
 
 ## When to Apply Manually
 
@@ -165,17 +144,12 @@ When you start a session mid-phase:
 
 ---
 
-## Step 3 - Token Budget & Phase Sizing
+## Step 3 - Phase sizing
 
-Before writing the plan, estimate token load per phase and enforce these limits:
-
-| Phase complexity | Max files | Max lines | Recommended action |
-|---|---|---|---|
-| Low | <= 10 | <= 800 | Single phase, single session |
-| Medium | 10-20 | 800-2000 | Single phase, may need 2 sessions |
-| High | > 20 | > 2000 | **Split into sub-phases (5a, 5b, 5c)** |
-
-High-complexity phases MUST be split before work begins. A phase that cannot be completed in one session without context degradation is a planning failure, not an execution problem.
+Phase splitting and token estimation are handled automatically by `/session-handoff` each time a
+plan is approved. When running `/handoff-setup` for the first time, aim for phases that touch no
+more than 10 files and produce a single verifiable outcome - defer finer splitting to
+`/session-handoff` once the plan is approved.
 
 ---
 

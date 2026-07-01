@@ -1,203 +1,149 @@
 # Cross-Repository Dependency Analysis Skill
 
-AI-powered skill for analyzing and tracking dependencies between interconnected code repositories.
+AI-powered skill for analyzing and tracking dependencies between interconnected code repositories. Automatically detects ripple effects when development completes in one repo and surfaces impacts on all other configured repos.
+
+## Quick Start
+
+1. Run the installer once:
+   ```powershell
+   .\install.ps1
+   ```
+2. Add your interconnected repos via the interactive menu
+3. Restart Claude Code
+4. From any configured repo: invoke `/repo-dependency-analysis`
+
+The skill will automatically run crosschecks when all todos complete in a session.
 
 ## Structure
 
 ```
 repo-dependency-analysis/
-├── SKILL.md                      # Main skill definition (loaded by AI)
+├── SKILL.md                          # Main skill definition (loaded by AI)
+├── install.ps1                       # Interactive installer: configure repos + register hook
+├── hooks/
+│   └── on-todo-complete.ps1          # PostToolUse hook: auto-crosscheck on todo completion
 ├── scripts/
-│   ├── analyze-repos.js          # Dependency scanner
-│   └── detect-ripple-effects.js  # Impact analyzer
+│   ├── analyze-repos.js              # Dependency scanner
+│   └── detect-ripple-effects.js      # Impact analyzer (diff-aware)
 ├── references/
-│   └── dependency-types.md       # Pattern documentation
-├── .analysis-cache/              # Generated analysis results
-│   ├── .gitignore                # Don't commit cache
-│   ├── config.json               # User configuration (created on first run)
-│   ├── repo-map.json             # Dependency graph (generated)
-│   └── connection-report.md      # Human-readable report (generated)
-└── README.md                     # This file
+│   └── dependency-types.md           # Pattern documentation
+├── .analysis-cache/
+│   └── .gitignore
+└── README.md
 ```
 
-## How It Works
+**Runtime files (user-level, not in repo):**
+```
+~/.claude/
+  repo-dependency-config.json         # Repo list (managed by install.ps1)
+  repo-dependency-cache/
+    repo-map.json                     # Dependency graph (generated)
+    connection-report.md              # Human-readable report (generated)
+  repo-dependency-skill-path.txt      # Sidecar used by hook to locate scripts
+  scripts/
+    on-repo-dep-todo-complete.ps1     # Installed hook script
+```
 
-### 1. Discovery
-When you type `@antigravity /repo-dependency-analysis`, the AI loads `SKILL.md` which contains:
-- When to use the skill
-- Workflow instructions
-- Script references
+## Installer Commands
 
-### 2. Initial Setup
-On first run, the AI prompts you for:
-- Repository paths to analyze
-- Which dependency types to track
+```powershell
+.\install.ps1              # Full interactive setup (configure repos + install hook)
+.\install.ps1 add          # Add a repository to config
+.\install.ps1 remove       # Remove a repository from config
+.\install.ps1 list         # List configured repositories
+.\install.ps1 -Uninstall   # Remove hook (config preserved)
+```
 
-Then runs: `node scripts/analyze-repos.js setup <paths>`
+## Auto-Crosscheck
 
-### 3. Analysis
-The analyzer:
-- Scans each repository for connection patterns
-- Builds dependency graph
-- Generates reports in `.analysis-cache/`
+When all todos in a Claude Code session complete and the working directory is under a configured repo, a background sub-agent automatically:
 
-### 4. Impact Detection
-When you modify code, run: `node scripts/detect-ripple-effects.js`
+1. Captures a git diff snapshot (changed files, exported symbols, env keys, API endpoints)
+2. Runs `detect-ripple-effects.js --diff-file <snapshot>` against all other configured repos
+3. Reports CRITICAL and WARNING impacts in `%TEMP%\claude-repo-dep-analysis.log`
 
-This compares your changes against the baseline and warns about ripple effects.
+A 30-minute debounce prevents repeated triggers within the same session.
 
-## Usage Examples
+## Manual Usage
 
 ### Via AI Chat
 ```
-@antigravity /repo-dependency-analysis
-
-# First time:
-> I'll analyze dependencies. Please provide repository paths:
-c:/repos/api-service, c:/repos/frontend, c:/repos/docker-compose
-
-# Later:
-@antigravity Check if my changes will break other repos
-
-> ⚠️ Potential Impact on frontend-app
-> Changed: UserProfile interface - removed 'email' property
-> Sync Steps:
->   1. Update frontend/types/user.ts
->   2. Run: npm test in frontend-app
+/repo-dependency-analysis
+/repo-dependency-analysis refresh
+/repo-dependency-analysis status
 ```
 
 ### Via Command Line
-```bash
+```powershell
 # Initial setup
 node scripts/analyze-repos.js setup c:/repo1 c:/repo2 c:/repo3
 
 # Refresh analysis
 node scripts/analyze-repos.js refresh
 
-# Check for ripple effects
+# Check for ripple effects (auto-detects cwd)
 node scripts/detect-ripple-effects.js
 
-# CI/CD integration (exit 1 on critical impacts)
+# Targeted analysis using a diff snapshot
+node scripts/detect-ripple-effects.js --diff-file C:/path/to/snapshot.json
+
+# CI/CD: exit 1 on CRITICAL impacts
 node scripts/detect-ripple-effects.js --strict
+
+# Legacy paths (backward compat)
+node scripts/analyze-repos.js refresh --config .analysis-cache/config.json --cache-dir .analysis-cache/
 ```
 
 ## Supported Dependency Types
 
-✅ npm file: dependencies  
-✅ Maven system dependencies  
-✅ Docker Compose services  
-✅ Environment variables  
-✅ OpenAPI/GraphQL schemas  
-✅ TypeScript type imports  
+- npm `file:` dependencies
+- Maven system dependencies
+- Docker Compose services and `depends_on`
+- Environment variables (`.env.example`)
+- OpenAPI / GraphQL schemas
+- TypeScript exported symbols
 
-See [dependency-types.md](references/dependency-types.md) for details.
+See [dependency-types.md](references/dependency-types.md) for detection details.
 
 ## Configuration
 
-After first run, edit `.analysis-cache/config.json` to:
-- Add/remove repositories
-- Enable/disable dependency types
-- Add ignore patterns
+Managed by `install.ps1` and stored at `~/.claude/repo-dependency-config.json`:
 
 ```json
 {
   "repositories": [
-    {
-      "name": "my-api",
-      "path": "c:/repos/my-api",
-      "type": "node",
-      "primary": true
-    }
+    { "name": "my-api", "path": "c:/repos/my-api", "type": "node" }
   ],
   "trackDependencies": {
-    "npm": true,
-    "docker": true,
-    "envVars": true
-  }
+    "npm": true, "maven": true, "docker": true,
+    "envVars": true, "apiSchemas": true, "typeDefinitions": true
+  },
+  "ignorePatterns": ["**/node_modules/**", "**/target/**", "**/.git/**"]
 }
 ```
 
-## Custom Rules
+Edit this file directly, or use `.\install.ps1 add` / `.\install.ps1 remove`.
 
-Define custom dependency patterns in `.analysis-cache/custom-rules.json`:
+## CI/CD Integration
 
-```json
-{
-  "rules": [
-    {
-      "name": "Shared Config Schema",
-      "sourceFile": "config/schema.json",
-      "consumerRepos": ["service-a", "service-b"],
-      "onBreakingChange": {
-        "severity": "critical",
-        "syncSteps": [
-          "Update config files",
-          "Run validation"
-        ]
-      }
-    }
-  ]
-}
-```
-
-## Integration
-
-### Pre-Commit Hook
-```bash
-# .git/hooks/pre-commit
-#!/bin/bash
-node .gemini/antigravity/skills/repo-dependency-analysis/scripts/detect-ripple-effects.js
-if [ $? -ne 0 ]; then
-  echo "❌ Breaking changes detected"
-  exit 1
-fi
-```
-
-### CI/CD Pipeline
 ```yaml
 # .github/workflows/test.yml
 - name: Check Ripple Effects
-  run: |
-    node .gemini/antigravity/skills/repo-dependency-analysis/scripts/detect-ripple-effects.js --strict
+  run: node skills/repo-dependency-analysis/scripts/detect-ripple-effects.js --strict
 ```
 
 ## Troubleshooting
 
-**"No connections found"**
-- Verify repository paths are correct
-- Check repos actually have dependencies
-- Try enabling more dependency types
+**"No connections found"** - Verify repo paths, check repos have shared dependencies, enable more dependency types.
 
-**Stale analysis**
-- Run `@antigravity /repo-dependency-analysis refresh`
-- Or: `node scripts/analyze-repos.js refresh`
+**Stale analysis** - Run `/repo-dependency-analysis refresh` or `node scripts/analyze-repos.js refresh`.
 
-**False positives**
-- Add patterns to `ignorePatterns` in config
-- Define custom rules for complex cases
+**Hook not firing** - Confirm `~/.claude/settings.json` has the `on-repo-dep-todo-complete` TodoWrite entry and Claude Code was restarted.
 
-## Files Generated
-
-**.analysis-cache/config.json**
-- Your repository configuration
-- Safe to commit (no secrets)
-
-**.analysis-cache/repo-map.json**
-- Complete dependency graph
-- Machine-readable format
-- Used by impact detector
-
-**.analysis-cache/connection-report.md**
-- Human-readable analysis
-- Lists all connections
-- Shows impact matrix
+**False positives** - Add patterns to `ignorePatterns` in config.
 
 ## Requirements
 
-- Node.js 18+ (for scripts)
-- Git (for change detection)
-- AI agent with skill support (Gemini, Claude, etc.)
-
-## License
-
-Part of the gherkin-sandbox test automation project.
+- Node.js 18+
+- Git
+- Claude Code with skill support

@@ -1,5 +1,5 @@
 # PostToolUse hook: ExitPlanMode
-# Finds the most recently written plan file and asynchronously invokes the agent-handoff
+# Finds the most recently written plan file and asynchronously invokes the session-handoff
 # skill to incorporate the plan's phases and tasks into implementation_plan.md.
 # Returns immediately so the conversation is not blocked.
 
@@ -18,7 +18,7 @@ $planFile = Get-ChildItem -Path $plansDir -Filter "*.md" -ErrorAction SilentlyCo
 if (-not $planFile) { exit 0 }
 
 $logFile = Join-Path $env:TEMP "claude-handoff-exit.log"
-$prompt = "The plan at '$planFile' was just accepted. Run the agent-handoff skill: incorporate the plan's phases and tasks into implementation_plan.md. Preserve AGENT_CONTEXT.md unless it needs an update."
+$prompt = "The plan at '$planFile' was just accepted. Run /session-handoff skill: incorporate the plan's phases and tasks into implementation_plan.md. Preserve AGENT_CONTEXT.md unless it needs an update."
 
 Start-Process -FilePath "pwsh" `
     -ArgumentList @(

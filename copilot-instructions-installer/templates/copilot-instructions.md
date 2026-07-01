@@ -55,3 +55,6 @@ Keep it Simple: Separate concerns cleanly and make data flow obvious. Avoid gene
 Internal Check: Do a mental syntax check before outputting any code. Do not rely on me to report errors to fix cascading syntax issues.
 
 Verification Command: Following any code generation, output the exact terminal command needed to validate the changes (e.g., npm run typecheck or tsc --noEmit) as the very last line of your response.
+
+## 8. Credential Storage & Secret Hygiene
+Never commit secrets, access keys, tokens, or passwords in plaintext. Store passwords encrypted at rest (AES-256-GCM; key derived at request time from a developer passphrase via Argon2id + a random salt). The passphrase is never stored; returning an exact password requires it. Hashing is one-way (verify-only) and cannot be reversed to reveal a password. Put other secrets in env vars or a secrets manager, never the repo (commit only `.env.example` placeholders). Test-user credentials are exempt unless the account is administrator-or-higher.

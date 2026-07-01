@@ -1,5 +1,5 @@
-# agent-handoff/install.ps1
-# Installs Claude Code hook scripts and settings.json patch for the agent-handoff skill.
+# handoff-setup/install.ps1
+# Installs Claude Code hook scripts and settings.json patch for the handoff-setup skill.
 # Idempotent — safe to run multiple times.
 #
 # Usage:
@@ -16,16 +16,12 @@ $ScriptsDir  = "$env:USERPROFILE\.claude\scripts"
 $SettingsFile = "$env:USERPROFILE\.claude\settings.json"
 
 $HookScripts = @(
-    "on-enter-plan-mode.ps1",
-    "on-exit-plan-mode.ps1",
     "on-todo-write.ps1"
 )
 
 # matcher -> script filename
 $HookMap = [ordered]@{
-    "EnterPlanMode" = "on-enter-plan-mode.ps1"
-    "ExitPlanMode"  = "on-exit-plan-mode.ps1"
-    "TodoWrite"     = "on-todo-write.ps1"
+    "TodoWrite" = "on-todo-write.ps1"
 }
 
 function Write-Ok   { param($m) Write-Host "  [OK]   $m" -ForegroundColor Green }
@@ -34,7 +30,7 @@ function Write-Info { param($m) Write-Host "  [INFO] $m" -ForegroundColor Cyan }
 function Write-Fail { param($m) Write-Host "  [FAIL] $m" -ForegroundColor Red }
 
 Write-Host ""
-Write-Host "  agent-handoff hook $(if ($Uninstall) { 'un' })installer" -ForegroundColor Magenta
+Write-Host "  handoff-setup $(if ($Uninstall) { 'un' })installer" -ForegroundColor Magenta
 Write-Host "  ─────────────────────────────────────" -ForegroundColor DarkGray
 Write-Host ""
 
