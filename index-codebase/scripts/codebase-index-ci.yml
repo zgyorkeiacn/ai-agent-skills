@@ -1,0 +1,25 @@
+# Example CI gate for CODEBASE_INDEX.md drift (index-codebase skill, Mode 4).
+#
+# Copy `check-module-index.js` into your repo (e.g. `.github/scripts/check-module-index.js`)
+# and this workflow into `.github/workflows/`. Adjust the `node` path below to match.
+#
+# The checker exits non-zero on MISSING (a source file with no index row) or ORPHAN (a row
+# pointing at a deleted file); over-long role cells are advisory warnings only. This makes the
+# job a hard gate on real drift while tolerating legacy verbose rows until the next regen.
+name: codebase-index-drift
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'docs/CODEBASE_INDEX.md'
+      - 'CODEBASE_INDEX.md'
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Check CODEBASE_INDEX.md for drift
+        run: node .github/scripts/check-module-index.js

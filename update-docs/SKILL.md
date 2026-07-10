@@ -1,6 +1,6 @@
 ---
 name: update-docs
-description: 'Audit and update the docs/ folder to match the current source. Uses a central .docs-verified-sha file for efficient staleness detection (2-3 git calls). Default run updates structured docs only; use "full" for all 16 docs. "check" reports stale docs, a doc filename updates that one doc, "install-hooks" sets up git hooks.'
+description: 'Audit and update the docs/ folder to match the current source. Uses a central .docs-verified-sha file for efficient staleness detection (2-3 git calls). Default run updates structured docs only; use "full" for all 10 docs. "check" reports stale docs, a doc filename updates that one doc, "install-hooks" sets up git hooks.'
 argument-hint: 'Optional: "full" | "check" | "<DocFilename>.md" | "install-hooks"'
 user-invocable: true
 ---
@@ -38,29 +38,28 @@ Each doc is classified and mapped to the source files that trigger a re-audit.
 
 | File | Tier | Triggered by |
 |------|------|-------------|
-| `AGENT_MODULE_INDEX.md` | structured | any `src/` file (add / remove / rename / role change) |
 | `AGENT_CAPABILITIES.md` | structured | `src/index.ts`, `src/server/tools/`, `src/contracts/generateScenariosContract.ts` |
-| `HOW_IT_WORKS.md` | narrative | `src/services/scenarioGenerationPipeline.ts`, `src/server/mcpServer.ts` |
 | `LOCAL_IDE_USAGE.md` | narrative | `src/index.ts` (new CLI commands) |
 | `COPILOT_AGENT_USAGE.md` | narrative | `src/server/tools/` (new or renamed MCP tools) |
-| `SETUP_AI_AGENT.md` | narrative | `src/services/consumerInitService.ts`, `src/index.ts` |
 | `AUTO_UPDATE.md` | narrative | `src/services/selfUpdateService.ts` |
 | `WEB_UI.md` | narrative | `src/server/`, `src/services/activityIndicatorService.ts` |
 | `MAVEN_INTEGRATION.md` | narrative | `src/services/mavenSetupService.ts` |
 | `CONSISTENCY_ANALYSIS.md` | narrative | `src/services/consistencyAnalysisService.ts` |
-| `DISTRIBUTION_AS_DEPENDENCY.md` | narrative | `src/services/consumerInitService.ts` |
-| `CAPABILITY_ANALYSIS.md` | narrative | `AGENT_CAPABILITIES.md` (re-derived from it) |
 | `COMPREHENSIVE_GUIDE.md` | narrative | any `src/` change |
 | `ENTERPRISE_USAGE.md` | narrative | `src/index.ts`, `src/services/consumerInitService.ts` |
-| `AI_AGENT_INSTALL_RUNBOOK.md` | narrative | `src/services/consumerInitService.ts`, `src/services/mavenSetupService.ts` |
 | `AGENT_RULES.md` | narrative | `src/services/aiGenerationService.ts`, `src/services/scenarioGenerationPipeline.ts` |
+
+> `CODEBASE_INDEX.md` is **not** in this registry: the per-file source map is owned and refreshed
+> by the `/index-codebase` skill, not update-docs. (`AGENT_MODULE_INDEX.md` was retired into
+> `CODEBASE_INDEX.md`.) `index.md` (the OKF bundle landing) and `LOCAL_LLM.md` are also outside the
+> auto-audit set - hand-maintained.
 
 ---
 
 ## Mode 1: Structured docs (default)
 
-Processes only the two structured docs (AGENT_MODULE_INDEX.md, AGENT_CAPABILITIES.md).
-Use `/update-docs full` to include all 16 narrative docs.
+Processes only the one structured doc (AGENT_CAPABILITIES.md).
+Use `/update-docs full` to include the narrative docs too (10 registry docs total).
 
 ### Step 0 - Load base SHA
 Read `.docs-verified-sha` at the repo root.
@@ -69,7 +68,12 @@ Read `.docs-verified-sha` at the repo root.
   `git rev-parse --short HEAD` as `{base-sha}` for diff commands.
 
 ### Step 1 - Verify docs/ exists
-Check that `docs/` exists at the repo root. If not, abort: "No docs/ directory found at repo root."
+Check that `docs/` exists at the repo root.
+- **Present:** proceed with Steps 2-6 (root-doc processing), then Steps 7-8.
+- **Absent BUT `.gitmodules` exists** (umbrella repo whose docs live in submodules, e.g.
+  gherkin-sandbox): skip the root-doc steps and jump straight to Step 7 (submodule phase) and
+  Step 8 (standalone skill sync). Do NOT abort.
+- **Absent AND no `.gitmodules`:** abort - "No docs/ directory found at repo root."
 
 ### Step 2 - Get current HEAD SHA
 ```
@@ -92,7 +96,6 @@ Merge all three lists (deduplicated) before checking trigger files. A file that 
 in the uncommitted lists is still counted as a trigger for staleness.
 
 Use the resulting file list to check each structured doc against its trigger files:
-- `AGENT_MODULE_INDEX.md`: stale if any path starting with `src/` appears in the diff.
 - `AGENT_CAPABILITIES.md`: stale if `src/index.ts`, any path starting with `src/server/tools/`,
   or `src/contracts/generateScenariosContract.ts` appears in the diff.
 
@@ -100,22 +103,8 @@ Report: `[stale] FILENAME` or `[ok] FILENAME` for each structured doc.
 
 ### Step 4 - Process stale structured docs
 
-#### AGENT_MODULE_INDEX.md
-
-This doc mirrors every file in `src/` with a role description and key exports. Update strategy
-mirrors `/index-codebase refresh`:
-
-1. Find all `src/` files changed since `{base-sha}` (added / modified / deleted).
-2. For each **modified** file: re-read it (first 80 lines), re-derive role + key exports, `Edit`
-   the existing row in the table.
-3. For each **added** file: read it, derive role + key exports, insert a new row in the correct
-   section (grouped by immediate parent directory, sorted alphabetically).
-4. For each **deleted** file: remove its row. If the section becomes empty, remove the section
-   heading + table.
-
-Role format: plain text, max 80 chars, describes WHAT the file does.
-Key exports: backtick-quoted exported identifiers only (no private helpers).
-Link format: `[src/services/foo.ts](../src/services/foo.ts)` (relative from `docs/`).
+> The per-file source map (`CODEBASE_INDEX.md`) is owned by `/index-codebase`, not update-docs.
+> The only structured doc processed here is `AGENT_CAPABILITIES.md`.
 
 #### AGENT_CAPABILITIES.md
 
@@ -146,11 +135,17 @@ List every doc touched with: doc name, action taken (updated N rows / skipped).
 If `.gitmodules` exists at the repo root, run the **Submodule Phase** (see
 `## Submodule discovery` below) after the root repo docs are processed.
 
+### Step 8 - Standalone skill sync (umbrella only)
+After submodules are processed, if `services/agent/docs/AGENT_RULES.md` is in the merged
+changed-files set, run the **Standalone skill sync** (see `## Standalone skill sync` below) to
+propagate the rule change into the `automation-agent-standalone` skill. Umbrella-level only; skip
+inside a single-submodule run.
+
 ---
 
 ## Mode 1F: Full audit (`/update-docs full`)
 
-Runs Mode 1 Steps 0-6, extended to cover all 16 docs.
+Runs Mode 1 Steps 0-6, extended to cover all 10 docs.
 
 ### Step 3F - Extend staleness detection to narrative docs
 After the single diff from Step 3, check each narrative doc against its trigger files using the
@@ -158,10 +153,8 @@ same changed-files list (prefix/contains matching against the diff output):
 
 - Path prefix matches: `src/server/tools/` matches any path starting with that prefix.
 - Exact matches: `src/services/selfUpdateService.ts` matches that exact path.
-- `CAPABILITY_ANALYSIS.md` trigger is `AGENT_CAPABILITIES.md` - check if that doc file itself
-  appears in the diff (it is a doc-to-doc dependency).
 
-Report: `[stale] FILENAME` or `[ok] FILENAME` for all 16 docs.
+Report: `[stale] FILENAME` or `[ok] FILENAME` for all 10 docs.
 
 ### Step 5F - Process stale narrative docs
 For each stale narrative doc (after processing stale structured docs per Step 4):
@@ -192,7 +185,7 @@ submodule's run).
 
 ## Mode 2: Check (dry run)
 
-Reports staleness for all 16 docs without writing anything.
+Reports staleness for all 10 docs without writing anything.
 
 ### Step 0 - Load base SHA
 Same as Mode 1 Step 0.
@@ -304,13 +297,13 @@ For each qualifying submodule (non-feature branch):
    `[submodule: <path>] skipped - no docs/ directory`
 
 5. Determine registry type:
-   - If `<submodule>/docs/AGENT_MODULE_INDEX.md` exists: full registry applies.
+   - If `<submodule>/docs/AGENT_CAPABILITIES.md` exists: full registry applies.
      Run Mode 1 (or Mode 1F if the parent invocation was `full`) for this submodule,
      treating the submodule root as the repo root. Base-sha comes from
      `<submodule>/.docs-verified-sha` (absent = first-run, treat all docs stale).
    - Otherwise: no known registry - skip update-docs for this submodule.
      (Its source index is handled by /index-codebase.)
-     Report: `[submodule: <path>] skipped - no AGENT_MODULE_INDEX.md registry`
+     Report: `[submodule: <path>] skipped - no AGENT_CAPABILITIES.md registry`
 
 6. For full-registry submodules, use the merged changed-files list from step 3 as the
    trigger list (instead of `git diff {base-sha} HEAD`). Run Mode 1 Steps 3-5 scoped to
@@ -321,9 +314,60 @@ For each qualifying submodule (non-feature branch):
 
 ---
 
+## Standalone skill sync
+
+Runs at the **umbrella level only**, after the submodule phase (Mode 1 Step 8 / the Mode 1F
+equivalent), gated on `services/agent/docs/AGENT_RULES.md` appearing in the merged changed-files
+set. Propagates a rule-contract change into the `automation-agent-standalone` skill - a
+hand-maintained paraphrase of the same pipeline living in the `skills/` submodule. This automates
+what the umbrella `CLAUDE.md` used to require by hand.
+
+Targets (all under `skills/automation-agent-standalone/`): `SKILL.md`,
+`copilot-instructions-template.md`, `README.md`.
+
+Procedure:
+1. Diff the rules: `git -C services/agent diff {base-sha} HEAD -- docs/AGENT_RULES.md` (plus the
+   uncommitted lists) to find which contract(s) changed.
+2. For each changed contract, use the mapping table below to locate the corresponding section(s)
+   in the target files and rewrite ONLY those, re-condensing to each file's existing style
+   (targeted `Edit`, never a full rewrite).
+3. Constraints (do NOT violate):
+   - Map by **content, not rule number**. `SKILL.md` is mode-organized and its "Rule 14"/"Rule 15"
+     are homonyms meaning something else; `copilot-instructions-template.md` uses AGENT_RULES
+     numbering and is the closest mirror.
+   - `SKILL.md` is a deliberate **subset** (omits Rules 3/5/6/12/14/14A/15/Stage 2). Do NOT add
+     those to it.
+   - `README.md` is usage-only and already advertises `unit`/`visual` modes `SKILL.md` lacks. Do
+     NOT auto-reconcile that pre-existing drift; touch README only for the mode/flag/output-dir
+     rows the mapping table calls out.
+   - Preserve each file's frontmatter and unrelated sections.
+
+Rule -> skill-section mapping:
+
+| AGENT_RULES.md contract | SKILL.md target | copilot-instructions-template.md | README.md |
+|---|---|---|---|
+| Stage 0 baseline | `## Mode: analyze` Procedure | `### Stage 0` (shorter - re-condense) | orphan-resolution output line only |
+| Rule 1 target folder | plan Step 4 | `### Rule 1` | - |
+| Rule 1B ACs / journey | `## Mode: story` + plan Steps 1-3 (journey prompt verbatim) | `### Rule 1B` | - |
+| Rule 4 feature generation | bdd `### BDD Composition Rules` (renumbered) | `### Rule 4` (4.1-4.16) | - |
+| Rule 4B negative scenarios | bdd `### Inferred-Negative Scenarios` | `### Rule 4B` | - |
+| Step consolidation / P1-P16 / parameterization | steps Rule 7/8/8b/8c/8d/10 + anti-patterns; bdd Rule 16 catalogue | `### Rule 11.P2.PARAM` §3b/3c/3d/§7 + anti-patterns; Rule 4.16 table | - |
+| Rule 9 reuse classification | `## NLP Step Matching` | (n/a) | - |
+| Rule 10 coverage defs | coverage Step 4 table | `### Rule 10` | output-dir list |
+| Rule 13 credentials | Operating Rule 8 | §8 + `### Rule 13` | - |
+| Rule 14B mock/seam fidelity | steps `### Seam & mock fidelity` | `### Rule 14B` | - |
+| New stage / mode | new `## Mode:` + Mode Dispatch row | new rule section | mode table + flags |
+| Rules 3 / 5 / 6 / 12 / 14 / 14A / 15 / Stage 2 | no SKILL.md target - do not add | 14/14A/15/Stage 2 also omitted | `unit`/`visual` modes pre-exist |
+
+Report `[standalone-sync] <file>: <sections edited>` per file, or `[standalone-sync] no rule change`.
+
+---
+
 ## Rules
 
 - **No em-dash**: never use `-`; always a regular hyphen `-`.
+- **Preserve frontmatter**: every doc starts with a YAML frontmatter block (`--- ... ---`). Never
+  edit, reorder, or strip it - edits target body sections / table rows only.
 - **Diffs, not rewrites**: use `Edit` for targeted changes. Never `Write` the whole file unless
   the doc does not yet exist (first-time structured creation).
 - **Truthfulness**: never invent capabilities that do not exist in the current source. If unsure

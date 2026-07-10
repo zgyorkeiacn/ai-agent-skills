@@ -79,14 +79,44 @@ If `FIGMA_TOKEN` is set and the user mentioned Figma URLs, append:
 
 Full pipeline: fetch story, analyze repo, compose BDD/E2E scenarios, generate step definitions.
 
+### Step A - Check for saved profiles
+
+Run:
+```
+<agent> list-input-profiles
+```
+
+- If **no profiles exist**: skip to Step B (collect manually).
+- If **profiles exist**: present the list to the user and ask:
+  "Use a saved profile, or configure manually?"
+  - **Profile chosen**: collect `storyUrl` only (from argument or conversation history, or ask). Then:
+    ```
+    <agent> generate-tests --profile-name "<slug>" --azure-story-url "<storyUrl>"
+    ```
+    Done - skip Step B and Step C.
+  - **Manual**: proceed to Step B.
+
+### Step B - Collect manually
+
 Collect:
 - `storyUrl`: look in the argument or conversation history for an ADO URL. If not found, ask.
 - `repoPath`: the current working directory, or ask if the user specified a different target repo.
 
 Run:
 ```
-<agent> generate-tests --azureStoryUrl "<storyUrl>" --repoPath "<repoPath>"
+<agent> generate-tests --azure-story-url "<storyUrl>" --repo-path "<repoPath>"
 ```
+
+### Step C - Offer to save profile
+
+After a successful manual run, ask the user once:
+"Save this configuration as a profile for **`<repoFolderName>`** so you only need the story URL next time?"
+
+If yes:
+```
+<agent> save-input-profile --repo-path "<repoPath>"
+```
+Report the slug that was saved.
 
 ---
 

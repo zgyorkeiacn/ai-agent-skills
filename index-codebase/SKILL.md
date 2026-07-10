@@ -1,15 +1,16 @@
 ---
 name: index-codebase
-description: 'Generate and maintain CODEBASE_INDEX.md - a human+AI-readable module index grouped by directory with roles and key exports. Invoke with no args for full generation, "refresh" for delta update, or "install-hooks" to set up git staleness tracking.'
-argument-hint: 'Optional: "refresh" | "install-hooks"'
+description: 'Generate and maintain CODEBASE_INDEX.md - an OKF-framed, human+AI-readable module index grouped by directory with roles and key exports. Invoke with no args for full generation, "refresh" for delta update, "lint" for drift detection, or "install-hooks" to set up git staleness tracking.'
+argument-hint: 'Optional: "refresh" | "lint" | "install-hooks"'
 user-invocable: true
 ---
 
 # index-codebase Skill (`/index-codebase`)
 
 Generates and maintains a `CODEBASE_INDEX.md` for the **current working repository** - a human+AI-readable
-module index grouped by directory with role descriptions and key exports. Modelled on the format of
-`docs/AGENT_MODULE_INDEX.md` in copilot-ado-figma-gherkin-agent, but generic and language-aware.
+module index grouped by directory with role descriptions and key exports. It is an OKF (Open
+Knowledge Format) concept: the file carries YAML frontmatter (`type: Index`, title, description,
+tags, timestamp) so it sits alongside the rest of a repo's docs bundle. Generic and language-aware.
 
 The index is the single fastest way for a fresh agent session to locate code without cold-grepping the
 entire source tree.
@@ -24,6 +25,7 @@ Inspect the argument passed by the user:
 |----------|------|
 | _(none)_ or unknown | **Mode 1** - full generation |
 | `refresh` | **Mode 2** - incremental delta |
+| `lint` | **Mode 4** - drift check (no writes) |
 | `install-hooks` | **Mode 3** - git hook installation |
 
 ---
@@ -82,8 +84,8 @@ Use language-specific patterns. Apply exclusions ruthlessly - the index covers p
 Read files in batches of 10-15 to stay within context. For each file, read the first 80-100 lines.
 Extract two things:
 
-- **Role**: a concise description (max 80 chars) of what this file does - inferred from its directory
-  position, filename, and content. Examples: "CLI entry point - parses argv and dispatches commands",
+- **Role**: a concise description (single clause, <= 140 chars, WHAT not HOW) of what this file does
+  - inferred from its directory position, filename, and content. Examples: "CLI entry point - parses argv and dispatches commands",
   "HTTP client for Azure DevOps REST API", "Zod input schema + parser for generation input".
 
 - **Key exports**: the public identifiers other modules import. For TypeScript: lines starting with
@@ -125,12 +127,17 @@ If not inferable, leave a placeholder:
 {TODO: describe primary data flow after reviewing src/}
 ```
 
-### Step 8 - Add header and record SHA
-Use the template from `templates/CODEBASE_INDEX.template.md` for the header block. Run:
-```
-git rev-parse --short HEAD
-```
-Embed the result in: `_Last verified against commit \`{SHA}\`_`
+### Step 8 - Add frontmatter, header, module map, and SHA
+Use `templates/CODEBASE_INDEX.template.md`. Emit, at the top of the file:
+
+1. **YAML frontmatter** (OKF): `type: Index`, `title: Codebase Index`, a one-line `description`,
+   `tags: [index, codebase, navigation]`, and `timestamp` (ISO-8601, current date). This makes the
+   index a first-class OKF concept consistent with the repo's docs bundle.
+2. The audience blockquote, then `_Last verified against commit \`{SHA}\`_` with the SHA from
+   `git rev-parse --short HEAD`.
+3. A **`## Module map (by area)`** roll-up: one row per functional area (short label, key entry
+   module(s), one-line purpose) - a progressive-disclosure layer above the per-directory tables.
+   Omit for small repos (< ~15 source files).
 
 ### Step 9 - Clean up stale marker
 If `.codebase-index-stale` exists at the repo root, delete it.
@@ -289,7 +296,8 @@ be installed."
 ### Step 2 - Locate hook scripts
 The hook scripts ship alongside this skill in the `scripts/` subdirectory:
 - `scripts/post-merge-hook.sh` - creates `.codebase-index-stale` after `git pull` / `git merge`
-- `scripts/pre-push-hook.sh` - warns (non-blocking) if index is stale before `git push`
+- `scripts/pre-push-hook.sh` - warns (non-blocking) if index is stale or has drifted before `git push`
+- `scripts/check-module-index.js` - the deterministic drift checker the pre-push hook invokes
 
 Find the absolute path to the `scripts/` directory relative to this SKILL.md file.
 
@@ -298,9 +306,11 @@ Before copying, check if `.git/hooks/post-merge` and `.git/hooks/pre-push` alrea
 content. If either does, show the existing content and ask the user whether to overwrite.
 
 ### Step 4 - Copy hook scripts
-Copy both scripts to `.git/hooks/`:
+Copy to `.git/hooks/`:
 - `scripts/post-merge-hook.sh` -> `.git/hooks/post-merge`
 - `scripts/pre-push-hook.sh` -> `.git/hooks/pre-push`
+- `scripts/check-module-index.js` -> `.git/hooks/check-module-index.js` (the pre-push hook runs this
+  via `node`; skipped gracefully if `node` is absent)
 
 On Unix/macOS and Git-for-Windows: set executable bit with `chmod +x .git/hooks/post-merge .git/hooks/pre-push`.
 
@@ -321,6 +331,32 @@ section or equivalent):
 
 ### Step 7 - Report
 List: which hooks were installed (or skipped), the `.gitignore` change, and the CLAUDE.md suggestion.
+
+---
+
+## Mode 4: Lint (`/index-codebase lint`)
+
+Drift detection - **no writes**. Runs the deterministic checker, then an optional LLM spot-check.
+
+### Step 1 - Run the static checker
+Run the bundled `node scripts/check-module-index.js` (see `scripts/`). It:
+- enumerates source files (same globs/exclusions as Mode 1 Step 4),
+- parses the index's file-link rows,
+- reports and **exits non-zero** on: **missing** (a source file with no row) and **orphan** (a row
+  pointing at a non-existent file).
+- **Over-long role cells** (> 140 chars) are reported as **warnings** only - they do not fail the
+  run, so a full `/index-codebase` regen (which enforces the cap) can bring legacy rows under it
+  without blocking CI in the meantime.
+
+### Step 2 - Contradiction spot-check (optional, LLM)
+For rows whose files changed since the recorded SHA (`git diff {sha} HEAD --name-only`), re-read the
+file head and confirm the role still describes it; flag stale roles. Skip with `--no-llm` or when no
+SHA is recorded.
+
+### Step 3 - Report
+Print counts: missing / orphan / role-too-long / stale-role. Exit non-zero if any missing or orphan
+were found (so CI can gate on it). This mode never edits the index - run `/index-codebase refresh`
+to fix the drift it reports.
 
 ---
 
@@ -367,7 +403,11 @@ For each qualifying submodule (non-feature branch):
 - **No em-dash**: never use `-`; use a regular hyphen `-` in all generated Markdown.
 - **Relative links**: index table file cells use relative Markdown links from the repo root
   (`[src/foo.ts](src/foo.ts)`), never absolute Windows paths.
-- **Role column**: plain text, max ~80 chars. Describe the WHAT, not the HOW.
+- **Role column**: plain text, single clause, <= 140 chars. Describe the WHAT, not the HOW. The
+  `check-module-index` lint warns on over-long roles.
+- **Frontmatter (OKF)**: every generated index begins with a YAML frontmatter block
+  (`type: Index`, title, description, tags, timestamp). Refresh preserves it - never edit or strip
+  it. No `log.md` is used; the `Last verified` SHA line + git history are the change log.
 - **Key exports column**: only public/exported identifiers - no private helpers, no internal types.
 - **Test exclusion**: never index test files, spec files, generated files, or lock files.
 - **Diffs in refresh mode**: always `Edit` individual rows/sections; never `Write` the entire index
