@@ -14,9 +14,10 @@ Standalone BDD test generation skill for Claude Code and GitHub Copilot. Embeds 
 | `generate` | `/automation-agent-standalone generate <ado-url>` | Full pipeline: story -> plan -> BDD features -> step defs |
 | `bdd` | `/automation-agent-standalone bdd` | BDD feature files only (paste requirements or provide story URL) |
 | `steps` | `/automation-agent-standalone steps` | Step definitions for existing `.feature` files |
-| `unit` | `/automation-agent-standalone unit` | Spec-only TDD unit tests (Rule 14) from OpenAPI/LLD/Figma/ACs - no app code, red-first |
+| `unit` | `/automation-agent-standalone unit` | TDD unit tests (Rule 14) from OpenAPI/LLD/Figma/ACs - red-first + spec-only when the module is absent; code-grounded on the real interface when it already exists |
 | `visual` | `/automation-agent-standalone visual` | Spec-only Figma-driven visual-regression specs (Rule 15) - no app code |
 | `coverage` | `/automation-agent-standalone coverage` | API endpoint coverage analysis |
+| `log` | `/automation-agent-standalone log` | Work log + time-savings estimate for a run |
 | `copilot` | `/automation-agent-standalone copilot` | Install Copilot instructions into this project |
 
 ---
@@ -93,7 +94,7 @@ Then paste your requirements when prompted, and mention `testLayer=frontend` in 
 ```
 Then provide the path to your `.feature` file when prompted.
 
-**Generate spec-only TDD unit tests (red-first, no app code):**
+**Generate TDD unit tests (red-first + spec-only when the module is absent; code-grounded on the real interface when it exists):**
 ```
 /automation-agent-standalone unit
 ```
@@ -172,7 +173,20 @@ artifacts/
   <repo>-baseline.json              # Stage 0 repo analysis (cached)
   <repo>-step-database.md           # Step catalog (human-readable)
   <repo>-orphan-resolution.md       # Orphans reconciled vs source: scan-gap / renamed / dead
+  US12345-work-log-<run-id>.md      # Per-run work log (human), unique per run
+  work-log/
+    <run-id>_US12345.csv            # PowerBI-consumable (one row per stage)
+    <run-id>_US12345.json           # PowerBI / programmatic
 ```
+
+Every run also writes a **work log** (`--no-work-log` to skip): the operator (name / experience
+/ area), what each stage achieved, the tool's wall-clock time, and an estimated engineer-time
+equivalent (junior/medior/senior), complexity-weighted per artifact and by repo size/stack.
+Emitted as a human `.md` plus PowerBI-consumable `.csv` + `.json` in a central `work-log/` folder
+(PowerBI: Get Data -> Folder -> Combine). Uniquely named per run so logs accumulate. Operator
+identity is asked once and saved to `~/.claude/bdd-authoring-operator.json`
+(`--operator-name`/`--experience`/`--area` override). A planning estimate, not a controlled
+benchmark.
 
 ---
 

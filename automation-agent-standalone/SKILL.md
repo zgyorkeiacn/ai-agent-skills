@@ -50,6 +50,8 @@ Never commit secrets, access keys, tokens, or passwords in plaintext. Store pass
 - `<TeamTag>` - your team's mandatory scenario tag (e.g. `MyTeam_Test`). Set as an argument or answer when prompted.
 - `<StoryNumber>` - the ADO work item ID to use for `@US_<n>` tags.
 
+**Operator identity** (for the work log; asked once, then persisted): `<OperatorName>` / `<ExperienceLevel>` (`junior|medior|senior`) / `<Area>`. Resolved from flags `--operator-name`/`--experience`/`--area`, else `~/.claude/bdd-authoring-operator.json`, else asked once and saved there. See [Work Log](#work-log-automatic).
+
 ---
 
 ## Mode Dispatch
@@ -65,7 +67,34 @@ Inspect the argument passed to this skill:
 | `bdd` | [bdd mode](#mode-bdd) |
 | `steps` | [steps mode](#mode-steps) |
 | `coverage` | [coverage mode](#mode-coverage) |
+| `log` or `worklog` | [log mode](#mode-log) |
 | no argument or unrecognized | [guided mode](#mode-guided) |
+
+---
+
+## Work Log (automatic)
+
+Every mode records who ran it, what it did, how long the tool took, and an estimated
+engineer-time equivalent (junior/medior/senior) grounded in published authoring baselines.
+Always on; opt out with `--no-work-log`.
+
+- **Operator identity**: before the first work-log write, resolve `<OperatorName>` /
+  `<ExperienceLevel>` (`junior|medior|senior`) / `<Area>` - flags first, else
+  `~/.claude/bdd-authoring-operator.json`, else ask the user once, validate, and save that file.
+  Skip this under `--no-work-log`. These stamp the log header and the CSV/JSON dimensions.
+- Capture a **run-id** timestamp once at the start of the run and one start/end pair per stage.
+  PowerShell: `$runId = Get-Date -Format 'yyyyMMdd-HHmmss'`; `$t0 = Get-Date`;
+  `$sec = [int]((Get-Date) - $t0).TotalSeconds`. Bash: `runId=$(date +%Y%m%d-%H%M%S)`;
+  `t0=$(date +%s)`; `sec=$(( $(date +%s) - t0 ))`.
+- As each stage finishes, record a stage entry (units produced, per-artifact complexity tier,
+  one-line "work achieved", tool seconds). Classify each scenario/step-def Simple/Moderate/
+  Complex at composition time; `analyze` also records a repo-complexity factor.
+- A single-mode run writes its own log; `generate` writes ONE consolidated multi-stage log.
+- Write three files per run (unique per run - never overwrite): the human
+  `artifacts/<storyId>-work-log-<run-id>.md`, plus PowerBI-consumable
+  `artifacts/work-log/<run-id>_<storyId>.csv` and `.json` (one central folder for folder-combine).
+  See [Work log model](#work-log-model--template) for the operator-config snippet, estimation
+  model, `.md` template, and CSV/JSON schema.
 
 ---
 
@@ -154,6 +183,8 @@ Print a structured summary:
 - Child story titles (if any were fetched)
 
 Write `artifacts/{storyId}_story-context.md` with the full content.
+
+Record a [Work Log](#work-log-automatic) stage entry: AC count extracted + child stories.
 
 ---
 
@@ -464,6 +495,8 @@ SCORE(candidate, entry):
 
 When multiple entries score >= 70, rank by score descending. Break ties by preferring the lower line number (defined earlier = more foundational). Present no more than the top 3 candidates.
 
+Record a [Work Log](#work-log-automatic) stage entry: detected stack, step-catalog size, and the repo-complexity factor (sizeFactor x techFactor x monorepoFactor) from these signals.
+
 ---
 
 ## Mode: plan
@@ -597,6 +630,8 @@ PROCEDURE detect_target_folder(journey, repo_baseline):
 - One stub `.feature` file per journey: `artifacts/journeys/{storyId}_{journey-id}.feature` (headers only, filled in by `bdd` mode)
 - `artifacts/journeys/_{storyId}_unmapped.feature` - cross-cutting AC bucket
 
+Record a [Work Log](#work-log-automatic) stage entry: journey count.
+
 ---
 
 ## Mode: bdd
@@ -622,6 +657,11 @@ Follow ALL of these rules when generating BDD feature files:
 
 **Rule 1 - Output format:**
 Output a complete Gherkin .feature file as plain text. No prose around it. No Markdown fences. No commentary.
+Do NOT prepend any reasoning/analysis preamble (no paragraphs, no `**Derived ACs:**`, no `- AC_N:` bullets,
+no `---`, no `##` headings) - the FIRST character of the response must begin the feature header (the `@tag`
+line or `Feature:`). A leading preamble makes the file fail the Gherkin parser.
+Step keywords are ONLY Given/When/Then/And/But/`*` - never `Or`/`Nor` (Gherkin has no disjunction; use a
+second `And`/`Then` step or fold the alternative into the step text). An `Or` line fails the parser.
 
 **Rule 2 - Feature structure:**
 Start with feature-level tags on a single line, then `Feature: <name>`, then a 1-line description.
@@ -779,6 +819,8 @@ Write the feature file(s) to:
 - `artifacts/{storyId}/{journey-id}.feature` (if running from a journey map)
 - `artifacts/{storyId}/scenarios.feature` (if running from raw ACs)
 
+Record a [Work Log](#work-log-automatic) stage entry: scenario count across features, with each scenario's complexity tier (Simple/Moderate/Complex) tallied.
+
 ---
 
 ## Mode: steps
@@ -841,6 +883,36 @@ RIGHT: Then('the {string} array {string} item {string}', ..., arrayField, matchM
 HTTP VERB HARDCODED
 WRONG: Given('the GET {string} endpoint is configured to return status {int}', ...)
 RIGHT: Given('the {string} {string} endpoint is configured to return status {int}', ..., verb, path)
+
+RAW URL PATH IN PATTERN (a '/' is Cucumber-expression ALTERNATION - a literal path BREAKS parsing)
+WRONG: Given('the GET /challenges/meta/daily endpoint returns a challenge with tag {string}', ...)
+RIGHT: Given('the {string} {string} endpoint returns a challenge with tag {string}', ..., verb, path, tag)
+Never bake a literal URL/path (or any '/') into a step pattern - parameterize the path as {string}.
+
+REAL ROUTES ONLY: an HTTP step's endpoint (in the step BODY / test data) MUST be a real route the app exposes -
+read the app's route table (Express `router.*` + `app.use` mounts, Spring/FastAPI/etc. annotations) and use
+its exact METHOD+path INCLUDING any mount prefix (e.g. `POST /api/auth/register`, never a guessed
+`POST /api/users` and never dropping the `/api` prefix - a path missing the prefix hits the dev server's SPA
+fallback and returns HTML, not JSON). If no route fits the step's intent, mark it `// MISSING_ROUTE: <intent>`
+rather than inventing one.
+
+REAL INTERFACE GROUNDING (auth, state, data): bind generated tests to the app's REAL contract, not conventions.
+- REUSED STEPS ARE CANDIDATES, NOT GUARANTEES: a pre-existing/library step (e.g. a generic `I register`) may
+  target the wrong endpoint, omit a required field, or read the wrong token field for THIS app. Verify it
+  against the app's real routes/contract before reusing; if it does not fit, generate a grounded replacement
+  rather than trusting it. For auth specifically, confirm the register/login endpoint + body + token field
+  actually work (exercise them if you can) - do not assume a shared auth step is correct.
+- AUTH: use the app's real auth endpoints and body shape (e.g. register needs username + email + password,
+  password >= 8), not a generic `POST /api/users {username,password}`. Prefer REGISTER-FIRST (create a unique
+  user, then reuse its returned token) so no pre-seeded account is required; if the step supplies only a
+  username, derive a unique email (`<username>@example.com`) and a compliant password.
+- STATE/TOKEN: store and read the auth token in the target framework's REAL shared-state field (e.g.
+  `state.token` - the field its request helper + "I am authenticated" check use), never an invented
+  `state.authToken`/`accessToken`/`jwt`.
+- DATA VALUES: path params and example ids/slugs/enums MUST be REAL values the app defines (read its data
+  files / enums, e.g. a category slug `whisperer`), never invented (`norse-basics` -> empty result).
+- NO PLACEHOLDERS: a regular Scenario must carry concrete literals - never leave a `{name}` or `<name>` token
+  in step text/arguments (e.g. never a bare `"{username}"`); reserve `<...>` for Scenario Outline + Examples.
 
 PAGE CONTEXT IN RUNTIME ASSERTIONS
 WRONG: Then('no JavaScript runtime error is thrown on the Dashboard', ...)
@@ -965,6 +1037,8 @@ import { createBdd } from 'playwright-bdd';
 import { test } from '../bdd-steps/bdd';
 // Step registration via destructured helpers (NOT @Given/@When/@Then decorators, NOT test() blocks):
 const { Given, When, Then } = createBdd(test);
+// createBdd has no And/But; alias them (step matching is keyword-agnostic) so continuation steps register:
+const And = Given, But = Given;
 // Fixture parameter is a destructured ScenarioState - pick only what you need:
 When('I do X with {string}', async ({ page, baseUrl }: ScenarioState, value: string) => { ... });
 Then('the response status is {int}', async ({ lastResponse }: ScenarioState, code: number) => { ... });
@@ -996,11 +1070,67 @@ Then('the response status is {int}', async ({ lastResponse }: ScenarioState, cod
 Generated test/step code must bind to the code that actually exists - never to an invented seam. These rules
 apply to any generated test code and especially to jest/TS targets:
 
+- **Ground on the real module when it EXISTS (read the code BEFORE you generate).** Spec-only red-first is for
+  behavior that does not exist yet. When the unit's target module is ALREADY present in the workspace, OPEN it
+  first and read its REAL interface - the exact exported names, each signature (arg list + sync/async), the
+  top-level shape each returns, the HTTP route table it registers (`METHOD path` from `router.<verb>('/path',...)`),
+  and the collaborators it actually imports (with their member names). Generate the test against THAT: target the
+  real exports/endpoints, mock ONLY those real collaborators at their real members, assert only behavior the code
+  actually has. Do NOT invent an export name (`evaluate` when the real one is `checkAchievements`), a collaborator
+  (a `userStore` the module never imports), a persistence step, or async the code does not do. If a spec behavior
+  has no matching real export, skip it (`// RED: not in module interface`) and cover it in its real unit (route
+  handler / BDD) - never fabricate it. Keep the spec-only red-first path ONLY when the module is absent. This is
+  the PRIMARY defence against interface invention; the retarget / mock-fidelity bullets below are the
+  execution-time safety net for anything that slips through.
+- **Map spec behavior to the real function by PURPOSE, not just name.** Read each export's JSDoc / leading
+  comment (or infer its purpose from the function body) so you can match the behavior you need to test ("get user
+  info") to the export whose purpose fits (`getUser`) even when the names diverge - do NOT rename the real export
+  to match the spec. When several exports share a role, the purpose disambiguates which one to target.
+- **Target the REAL structure, not an assumed layout.** Do not assume an endpoint lives at `routes/<name>.js`
+  or that one Figma file is one component. Find where each endpoint is REALLY registered (an inline `app.<verb>`
+  in the entry file vs a router mounted via `app.use('/prefix', router)`) and mount only a real, importable
+  router at its real prefix; an inline entry endpoint is integration/BDD, not a unit (never `app.use(path,
+  undefined)`). For UI, target the app's REAL components (Navbar/Landing/ChallengeCard/...) - split an aggregate
+  design-library file across the real components it maps to; a screen-level aggregate with no single component is
+  E2E/BDD. Mock a central `api` object at its REAL namespaced shape (`api.challenges.get`), never invented flat
+  functions. When a behavior belongs to another module, skip it with a `// DEFERRED-TO: <module>` marker (keep the
+  AC id in the title) so it merges to that module's real result instead of a dead-end skip.
+- **Match the real DATA SHAPE + persistence envelope, not just the interface (read the SUT body).** Grounding the
+  names is not enough - fabricated fixtures that violate the code's invariants still fail. (a) ENTITY-SHAPE
+  FIDELITY: a fixture must carry every field the SUT DEREFERENCES, initialized as the code assumes - if the SUT
+  does `user.progress[cat]`, the user fixture MUST include `progress: {}` (mirror the real create/registration
+  path); never invent a field the SUT never uses (a bogus `level`). Put the full real shape in a shared `makeX()`
+  helper. (b) PERSISTENCE ENVELOPE: the envelope belongs to whoever the real code shows owns it - if the writer
+  persists its argument VERBATIM (the reader round-trips the whole object), the CALLER passes the full wrapper
+  (`writeUsers({ users: map })`, as real callers do: `const db = readUsers(); db.users[id]=...; writeUsers(db)`)
+  and reads back `readUsers().users`; only a writer that itself wraps at a key takes the bare map - do not assume.
+  For CRUD stores, prefer arranging/verifying through the SUT entity ops (`save`/`getById`/`getAll`) over
+  hand-driving the raw whole-store writer/reader pair.
+- **Model a store with generic ops only (generation-time layering).** Before you even pick a unit's surface: a
+  persistence store/repository (`*Store`/`*Repository`/`*Dao`/`*Model`) is modeled with ONLY generic persistence
+  operations (read/write, get-by-id, update, save, delete, list). Entity-lifecycle + auth behavior - create-user
+  (id/uuid + password hashing), `getByUsername`/`getByEmail` or any non-primary-key lookup, register/login/
+  authenticate - is realized in the ROUTE HANDLER: cover it with an HTTP-contract / BDD scenario, NOT a store unit
+  test. Do not assign `POST /api/auth/*` (register/login) ACs to a store module.
 - **Real exports + seam.** Import only functions the module actually exports; do not invent a repository/CRUD
   contract (`getAll/getById/getByUsername/create/update/save`), a function decomposition (splitting one real
   function into two), a synthetic parameter DTO, its data shape, or cross-function invariants. If the AC's
   behavior lives in a different unit (a route handler, a sibling module), test it THERE (an HTTP-contract /
   BDD scenario), not against an imagined helper.
+- **Retarget an imagined name onto the real member (same behavior, different name/shape).** When the module DOES
+  implement the behavior under a different export name or return shape, bind to the REAL member instead of
+  inventing one. Match by ROLE (read/list -> the collection reader; get/getBy-id -> the by-key getter;
+  update/patch -> the updater; create/add -> the creator; save/write -> the writer; evaluate/check/compute/assess
+  -> the derive-a-result op, e.g. `evaluate` -> the real `checkAchievements` on the same entity noun - a 1:1
+  synonym rename, never a composition) when its entity noun matches the module (e.g. `user` from `userStore`,
+  `achievement` from `achievements`), and adapt the SHAPE at the seam by UNWRAPPING a reader wrapper only
+  (`getAll()` -> `readUsers().users`), dropping `await` when the real member is sync. You MAY rewire the called
+  name inside an `expect(...)` (e.g. `getById(id)` -> `getUser(id)`), but NEVER change the matcher or expected
+  value to force a pass. Do NOT retarget a single-element create/save/delete onto a whole-collection writer
+  (`save(x)` -> `writeUsers({ users: x })` corrupts, and composing a read-modify-write invents a member the unit
+  lacks): if NO real export plays the role as a 1:1 rename/unwrap (`getByUsername`/`create`/`save`/`delete` with
+  no counterpart), leave it a phantom red and cover that behavior in its real unit (route handler / BDD) - never
+  fabricate or compose the member.
 - **Mock only real collaborators, at the real shape.** Mock the collaborators the code actually imports - not
   a non-dependency (a virtual mock of a non-dependency is a silent no-op), and never leave the real
   collaborator unmocked. Mirror the member shape (e.g. sync `fs.*Sync` vs async `fs.promises.*`).
@@ -1012,7 +1142,38 @@ apply to any generated test code and especially to jest/TS targets:
   never fabricate a pass.
 - **Async vs sync mock signature (jest).** Default a collaborator mock to a SYNC return (`mockReturnValue`) -
   a plain value is transparently awaitable; use `mockResolvedValue`/`mockRejectedValue` only when the real
-  collaborator is async. A Promise where the code expects a sync value silently corrupts the unit.
+  collaborator is async. A Promise where the code expects a sync value silently corrupts the unit. A `*Sync`
+  collaborator (`fs.readFileSync`, `existsSync`, ...) is ALWAYS sync - never seed it with `mockResolvedValue`,
+  and never mix channels on one mock var (`mockReturnValueOnce(...).mockResolvedValueOnce(...)`).
+- **Assertion sync/async fidelity (jest).** Same rule on the SUT-CALL side: a Promise-only matcher
+  (`.resolves`/`.rejects`) on a SYNCHRONOUS call fails at runtime ("received value must be a promise") even when
+  the behaviour is correct. Use `.resolves`/`.rejects` ONLY when the target is explicitly async (its real
+  signature is `async`, or a contract types it so). For a sync-or-unknown target: assert the value with
+  `expect(await fn(args)).toEqual(x)` (await of a sync value is harmless), and use `expect(() => fn(args)).toThrow()`
+  / `.not.toThrow()` for throw/no-throw; only when async-ness is genuinely unknown and you need reject semantics,
+  wrap universally: `await expect((async () => fn(args))()).rejects.toThrow()`. NEVER write
+  `.resolves.toThrow()`/`.resolves.not.toThrow()` (a resolved value cannot "throw" - use the sync form).
+- **Async emitter/stream seam timing (jest).** Mock a spawn/exec/fork child (or any EventEmitter/stream that
+  emits on a microtask/timer) LAZILY - `mock.mockImplementation(() => makeFakeChild(...))`, NEVER eagerly
+  `mock.mockReturnValue(makeFakeChild(...))`. Eager construction schedules the fake's `stdout` emit before the
+  SUT (which attaches `.on('data')/.on('close')` only AFTER an await, e.g. `fs.promises.mkdtemp`) can subscribe,
+  and a naive fake (unlike a real paused Node stream) drops the un-listened event -> stdout arrives empty and
+  `JSON.parse('')` throws. Also make the fake BUFFER `data` and flush it on the first `.on('data')`, emitting
+  `close`/`end` only after the data.
+- **Delegating-factory mock access (jest).** When the store/fs mock uses the hoisting-safe delegating factory
+  (arrows to module-scope `mock*` fns), configure and inspect ONLY those `mock*` fns
+  (`mockExistsSync.mockReturnValue(true)`, `mockWriteFileSync.mock.calls`) - NEVER a member of the required
+  module (`require('fs').existsSync.mockReturnValue(...)` is a plain arrow, not a `jest.fn` -> TypeError at setup).
+- **Serialized-fixture envelope fidelity (jest).** When you seed a reader/parse mock (e.g. `fs.readFileSync`)
+  with a serialized store, wrap the fixture in the SAME top-level envelope the code round-trips - the shape the
+  paired writer emits (`writeUsers(db)` -> `{ users: db }`) and the reader unwraps (`readUsers().users`). If the
+  code reads `read(...).<key>`, seed `{ <key>: <data> }`, never the bare `<data>`: a flat fixture makes `.<key>`
+  undefined and the assertion receives `undefined`. The reader is correct; only the fixture shape is wrong.
+- **Serialized-write envelope symmetry (jest).** The write-side companion: assert on a CAPTURED write payload
+  through the same envelope the write produces. If the write wraps at a key (`writeUsers({ users: x })` or the
+  writer emits `{ users: db }`), the captured JSON is `{ users: ... }` - assert `written.users[entry]`, never a
+  flat `written[entry]` (undefined), and pass the wrapper the FULL `users` map, not a single entry object.
+  Advisory only: this touches the asserted subject and test data, so surface it - never rewrite an assertion.
 - **Mock-factory TDZ safety (jest).** A `jest.mock` factory is hoisted above imports and fires during the SUT
   import; its returned object MUST NOT read a module-scope `const`/`let` directly (`default: mockCtor`) - that
   TDZ-crashes the WHOLE suite on load. Define the mock INLINE in the factory, or defer the read behind a
@@ -1021,6 +1182,26 @@ apply to any generated test code and especially to jest/TS targets:
   implement an asserted contract (e.g. returns a graceful fallback where the test expects a throw), leave the
   assertion and flag the spec-vs-code gap - it is a human AC-vs-code decision, not a silent edit. Do not add
   or modify application source to satisfy a generated test.
+- **CRUD lifecycle via a stateful in-memory fake (state-managing units only).** For a store/repository/CRUD
+  service backed by fs/db, do NOT hand-craft static fixtures. Mock the persistence collaborator ONCE as a
+  STATEFUL fake over a module-scope backing var (write stores what the SUT writes; read returns it; absent ->
+  the real not-found error), reset the var (not the mock identity) in `beforeEach`. HOISTING SAFETY: jest hoists
+  the `jest.mock()` factory and forbids non-`mock`-prefixed out-of-scope refs, so NAME the backing var
+  `mock`-prefixed (`mockStore`) and keep the factory a thin delegator to `mock*` fns
+  (`readFileSync: (...a) => mockReadFileSync(...a)`) with the stateful logic in `beforeEach` - never reference the
+  backing var inside the factory (else "module factory ... not allowed to reference out-of-scope variables"). Arrange by CREATING through
+  the SUT with RANDOMIZED data (inline `randomId()`/`randomName()`/... helpers, every free field randomized),
+  then VERIFY by reading back through the SUT (create -> getById/getAll; update -> read; delete -> null), a real
+  round-trip - so there is always fresh data to assert against and the SUT genuinely persists/mutates/removes it
+  (never a false green). Run create -> act -> delete in order; error paths (delete/read a missing id, empty
+  store) are the deliberate exception. Pure-function units keep classic AAA. The round-trip proves persistence, so
+  do NOT also assert the persistence MECHANISM (which fs method, atomic write/fsync, mkdir) - those are impl
+  guesses that break on sync/async/path divergence; and do NOT assume the store is async (fs stores are often
+  synchronous - avoid `.resolves`/`.rejects` unless the contract types it async; wire the fake to both the sync
+  and async seams). If the unit exposes only a whole-collection writer (`writeUsers(db)`) and NO single-element
+  create, a fabricated `save(entity)`/`delete(id)` is NOT retargeted - never `writeUsers({ users: x })` (which
+  corrupts the whole collection) and never a composed read-modify-write (which invents a member the unit lacks);
+  leave it a phantom red routed to BDD.
 
 ### Step 4 - Validate and write
 
@@ -1038,6 +1219,8 @@ Write files to:
 - Other: `{stepDefsDir}/{domain}StepDefs.{ext}` using the detected step defs directory
 
 Output the typecheck command as the last line of your response.
+
+Record a [Work Log](#work-log-automatic) stage entry: new vs reused step-defs, with each new step-def's complexity tier tallied (reused contribute 0 effort).
 
 ---
 
@@ -1059,6 +1242,10 @@ Optional flags (pass through to relevant modes):
 - `--testLayer frontend|backend|both` - layer filter (default: both)
 - `--no-step-gen` - stop after bdd mode (don't generate step defs)
 - `--fresh` - ignore any cached baseline
+- `--no-work-log` - skip the [Work Log](#work-log-automatic)
+- `--operator-name` / `--experience` / `--area` - operator identity for the work log
+
+Accumulate every stage's [Work Log](#work-log-automatic) entry across the run and write ONE consolidated set: `artifacts/<storyId>-work-log-<run-id>.md` + `artifacts/work-log/<run-id>_<storyId>.{csv,json}`.
 
 After completion, report:
 - Number of feature files written
@@ -1066,6 +1253,7 @@ After completion, report:
 - AC coverage summary (N covered / N partial / N missing out of M ACs)
 - Paths of all artifacts created
 - Any typecheck command to run
+- Time-savings summary: estimated engineer effort (junior/medior/senior) vs tool wall-clock, and the work-log paths
 
 ---
 
@@ -1106,6 +1294,14 @@ Write `artifacts/<storyId>-ac-coverage-report.md` with:
 - For `missing` ACs: quote the original AC text as a prompt for follow-up `bdd` mode invocation
 - For `over-specified` ACs: list the scenario titles and flag for deduplication review
 
+Record a [Work Log](#work-log-automatic) stage entry: AC count classified.
+
+---
+
+## Mode: log
+
+Render or re-render a run's [Work Log](#work-log-automatic) without regenerating tests. With no argument, summarize the most recent `artifacts/<storyId>-work-log-<run-id>.md`. Use this to review a prior run or to compose a log from stage entries recorded piecemeal across single-mode runs. See [Work log model](#work-log-model--template) for the estimation model and template.
+
 ---
 
 ## Mode: guided
@@ -1122,6 +1318,7 @@ automation-agent-standalone - available modes:
   5. bdd              - BDD feature files only (provide requirements or story URL)
   6. steps            - Step definitions for existing .feature files
   7. coverage         - AC traceability report: which ACs are covered/missing in generated feature files
+  8. log              - Work log + time-savings estimate for a run
 
 Which mode? (enter number or keyword)
 ```
@@ -1138,3 +1335,125 @@ After the user selects, re-invoke the corresponding mode.
 - If `AZURE_DEVOPS_PAT` is not set when running `story` or `generate`, stop and tell the user how to set it.
 - `@inferred-negative` companions do NOT count against the AC coverage invariant.
 - When the AC coverage invariant is violated (missing or duplicated AC), fix the output before writing.
+- Always write a per-run [Work Log](#work-log-automatic) (unique file, never overwrite) unless `--no-work-log`; present the engineer-time estimate as a planning figure, not a measured benchmark.
+
+---
+
+## Work log model & template
+
+The operator-identity resolution, estimation model, timing snippets, output template, and PowerBI export schema for the [Work Log](#work-log-automatic). The estimate is a planning figure from published authoring baselines, not a controlled benchmark. Record the caveat in every log: tool wall-clock includes interactive latency; the engineer figure is independent work-effort, not a measured race.
+
+### Operator identity (ask once, then persist)
+
+Resolve `<OperatorName>` / `<ExperienceLevel>` (`junior|medior|senior`) / `<Area>`, first hit wins: (1) flags `--operator-name`/`--experience`/`--area`; (2) user file `~/.claude/bdd-authoring-operator.json` = `{ "name","experienceLevel","area" }`; (3) ask once, validate the level, then write the file. Flags override the file for this run but do NOT rewrite it. Skip entirely under `--no-work-log`.
+```
+# PowerShell
+$cfgPath = "$env:USERPROFILE\.claude\bdd-authoring-operator.json"
+if (Test-Path $cfgPath) { $op = Get-Content $cfgPath -Raw | ConvertFrom-Json }
+else { # ...ask Name / Experience (junior|medior|senior) / Area...
+  $op = [PSCustomObject]@{ name=$name; experienceLevel=$level; area=$area }
+  New-Item -ItemType Directory -Force (Split-Path $cfgPath) | Out-Null
+  $op | ConvertTo-Json -Depth 5 | Set-Content $cfgPath -Encoding UTF8 }
+# Bash
+cfg="$HOME/.claude/bdd-authoring-operator.json"
+[ -f "$cfg" ] || { mkdir -p "$(dirname "$cfg")"; printf '{"name":"%s","experienceLevel":"%s","area":"%s"}\n' "$name" "$level" "$area" > "$cfg"; }
+```
+
+### Estimation model (constants - tunable; edit here to retune)
+
+Base engineer minutes at the **medior** level, per unit:
+
+| Stage | Unit | Medior min/unit |
+|-------|------|-----------------|
+| AC gathering (`story`) | per AC extracted + structured | 12 |
+| Repo analysis (`analyze`) | per run x repoComplexity | 60 |
+| Journey composition (`plan`) | per journey | 25 |
+| Test composition (`bdd`) | per scenario | 15 |
+| Step-def generation (`steps`) | per NEW step-def (reused = 0) | 25 |
+| Coverage (`coverage`) | fixed 20 + 2 per AC | 20 + 2/AC |
+
+**Experience multiplier** (applied to the whole total): junior `x1.6`, medior `x1.0`, senior `x0.6`.
+
+**Artifact complexity weight** (Moderate = 1.0); classify each scenario / step-def (and, when a clear signal exists, each AC / journey) as it is composed:
+
+| Tier | Weight | Scenario signals | Step-def signals |
+|------|--------|------------------|------------------|
+| Simple | 0.5 | <=6 steps; one status / single-field assertion; no data table; no outline | single client call or one equality assertion; reuses an existing helper |
+| Moderate | 1.0 | 6-12 steps; a few assertions; <=1 precondition/fixture | a couple of operations; some param handling |
+| Complex | 2.5 | >12 steps, or multi-field / collection / nested assertions, or `Scenario Outline` with multiple `Examples`, or multiple preconditions / cross-entity setup | stream/filter/map over collections, multi-field or nested assertions, multiple mocked collaborators, or a new helper/util is required |
+
+Default an artifact to Moderate when no clear signal. Reused step-defs never contribute.
+
+**Repo complexity** (weights `analyze` only; from signals `analyze` already collects - file/LOC counts, detected stack, step-catalog size, monorepo detection). `repoComplexity = sizeFactor x techFactor x monorepoFactor`:
+
+| Factor | Values |
+|--------|--------|
+| sizeFactor (test+source subtree) | Small `<~50 files / <~5k LOC` = 0.5; Moderate `~50-300 / ~5k-30k` = 1.0; Large `>~300 / >~30k` = 2.0 |
+| techFactor (readability of detected stack) | conventional (Java Cucumber-JVM, C# SpecFlow, Python behave, TS playwright-bdd) = 1.0; Karate (dense DSL, embedded JS, orchestration) = 1.4; mixed / unknown = 1.3 |
+| monorepoFactor | single repo = 1.0; monorepo with API-surface + orphan reconciliation = 1.25 |
+
+**Formula** (per experience level `E`):
+```
+perArtifact = Sum over ACs, journeys, scenarios, new step-defs of  baseMin(stage) x weight(artifact)
+perRun      = 60 x repoComplexity            (analyze; omit if analyze did not run)
+            + 20 + 2 x acCount               (coverage; omit if coverage did not run)
+effort(E)   = experienceMult(E) x (perArtifact + perRun)
+saved(E)    = effort(E) - toolWallClock ;  speedUp(E) = effort(E) / toolWallClock
+```
+
+### Output template (human `.md`)
+
+Write to `artifacts/<storyId>-work-log-<run-id>.md`. Keep the section order.
+```markdown
+# Work Log - <storyId> - <run-id>
+
+Run: <mode|generate>   Story: <US_n> - <title>
+Operator: <name> (<experienceLevel>)   Area: <area>
+Started: <ISO>   Finished: <ISO>   Tool wall-clock: <human>
+
+## Stages
+| Stage | Work achieved | Units | Complexity (S/M/C) | Tool time | Eng junior | Eng medior | Eng senior |
+|-------|---------------|-------|--------------------|-----------|------------|------------|------------|
+| AC gathering | Extracted N ACs from M stories | N ACs | 3/6/3 | 41s | <h> | <h> | <h> |
+| Repo analysis | Cataloged <stack>, N steps (repoCx <r>) | 1 repo | - | 22s | <h> | <h> | <h> |
+| Journey composition | Composed N journeys | N | 1/3/1 | 28s | <h> | <h> | <h> |
+| Test composition | N scenarios across M features | N | 6/8/3 | 1m30s | <h> | <h> | <h> |
+| Step-def generation | N new step-defs (R reused) | N new | 5/6/2 | 1m10s | <h> | <h> | <h> |
+| Coverage | Traceability for N ACs | N ACs | - | 15s | <h> | <h> | <h> |
+| **TOTAL** | | | | **<human>** | **<h>** | **<h>** | **<h>** |
+
+## Time savings (tool vs engineer)
+| Experience | Est. manual effort | Tool wall-clock | Saved | Speed-up |
+|------------|--------------------|-----------------|-------|----------|
+| Junior | <h> | <human> | <h> | ~<N>x |
+| Medior <- you | <h> | <human> | <h> | ~<N>x |
+| Senior | <h> | <human> | <h> | ~<N>x |
+(flag the operator's own tier with `<- you`.)
+
+## Basis
+Baselines: ~10 min/manual test case; 1.5-2.5 h (avg 2.0) per automated test-case-point; QA spends 30-45% of a sprint authoring/maintaining tests. Weights applied - complexity: simple 0.5 / moderate 1.0 / complex 2.5; experience: junior 1.6 / medior 1.0 / senior 0.6; repo complexity: size <s> x tech <t> x monorepo <m>. Planning estimate, not a controlled benchmark; tool wall-clock includes interactive latency.
+```
+
+### PowerBI export (CSV + JSON per run)
+
+Alongside the `.md`, write `artifacts/work-log/<run-id>_<storyId>.csv` and `.json` into ONE central folder for PowerBI `Get Data -> Folder -> Combine`. Unique per run, never overwritten.
+
+CSV = one row per STAGE, NO total row (PowerBI aggregates); stable header; `run_date` as `yyyy-MM-dd`; effort/saved numeric minutes, tool as seconds; quote free-text and double embedded quotes:
+```csv
+run_id,run_date,operator_name,experience_level,area,story_id,story_title,mode,stage,work_achieved,units,unit_count,complexity_simple,complexity_moderate,complexity_complex,repo_complexity,tool_seconds,eng_junior_min,eng_medior_min,eng_senior_min,saved_junior_min,saved_medior_min,saved_senior_min
+20260717-1_12345,2026-07-17,Zoltan,medior,Care,12345,"Login flow",generate,bdd,"16 scenarios across 3 features",scenarios,16,6,8,2,,120,384,240,144,382,238,142
+```
+(`repo_complexity` blank except on the `analyze` row.)
+
+JSON = one run object:
+```json
+{ "runId":"20260717-1_12345","runDate":"2026-07-17","mode":"generate",
+  "operator":{"name":"Zoltan","experienceLevel":"medior","area":"Care"},
+  "story":{"id":"12345","title":"Login flow"},
+  "stages":[{"stage":"bdd","units":"scenarios","unitCount":16,
+    "complexity":{"simple":6,"moderate":8,"complex":2},"repoComplexity":null,
+    "toolSeconds":120,"engJuniorMin":384,"engMediorMin":240,"engSeniorMin":144,
+    "savedJuniorMin":382,"savedMediorMin":238,"savedSeniorMin":142}],
+  "totals":{"toolSeconds":0,"engJuniorMin":0,"engMediorMin":0,"engSeniorMin":0} }
+```
+Load: PowerBI Get Data -> Folder -> the `work-log/` folder -> Combine; set `run_date` to Date and effort/saved/tool to whole number; each stage row is a fact; operator_name / area / experience_level / stage / mode / story_id are the dimensions. New runs = new files; Refresh.

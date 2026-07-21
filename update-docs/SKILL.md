@@ -356,6 +356,7 @@ Rule -> skill-section mapping:
 | Rule 10 coverage defs | coverage Step 4 table | `### Rule 10` | output-dir list |
 | Rule 13 credentials | Operating Rule 8 | §8 + `### Rule 13` | - |
 | Rule 14B mock/seam fidelity | steps `### Seam & mock fidelity` | `### Rule 14B` | - |
+| Rule 14C interface retargeting | no SKILL.md target (execution-time; no runner) | `### Rule 14C` | - |
 | New stage / mode | new `## Mode:` + Mode Dispatch row | new rule section | mode table + flags |
 | Rules 3 / 5 / 6 / 12 / 14 / 14A / 15 / Stage 2 | no SKILL.md target - do not add | 14/14A/15/Stage 2 also omitted | `unit`/`visual` modes pre-exist |
 
