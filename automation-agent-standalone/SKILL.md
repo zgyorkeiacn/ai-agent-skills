@@ -660,8 +660,12 @@ Output a complete Gherkin .feature file as plain text. No prose around it. No Ma
 Do NOT prepend any reasoning/analysis preamble (no paragraphs, no `**Derived ACs:**`, no `- AC_N:` bullets,
 no `---`, no `##` headings) - the FIRST character of the response must begin the feature header (the `@tag`
 line or `Feature:`). A leading preamble makes the file fail the Gherkin parser.
+Emit EXACTLY ONE `Feature:` block and NOTHING else - no reasoning, notes, or "Let me..."/"Actually..." lines
+ANYWHERE in the file (not just the top), and no earlier drafts; if you reconsider, output ONLY the final
+feature. Multiple `Feature:` blocks are invalid Gherkin and fail to parse.
 Step keywords are ONLY Given/When/Then/And/But/`*` - never `Or`/`Nor` (Gherkin has no disjunction; use a
 second `And`/`Then` step or fold the alternative into the step text). An `Or` line fails the parser.
+Never repeat the SAME step consecutively (e.g. the same `is visible` assertion 4x) - assert each thing once.
 
 **Rule 2 - Feature structure:**
 Start with feature-level tags on a single line, then `Feature: <name>`, then a 1-line description.
@@ -753,10 +757,16 @@ These step phrasings are canonical. Use them verbatim; do not invent per-instanc
 - Do NOT create separate step files for positive and negative modal state
 
 **LOCALSTORAGE**:
-- `Given the localStorage key {string} is set to {string}`
-- `Given the localStorage key {string} is cleared`
-- `Then the localStorage key {string} is {word}` (state: `present` | `absent`)
+- `Given the localStorage key {string} is set to {string}` - SETUP (establishes state)
+- `Given the localStorage key {string} is cleared` - SETUP (establishes state; `removed`/`empty`/`unset` are synonyms). The step-def implements the clear-verbs as `localStorage.removeItem(key)`, so a `Given ... is cleared` precondition removes the key instead of throwing `Unknown localStorage state`.
+- `Then the localStorage key {string} is {word}` (state: `present` | `absent`) - ASSERTION only
 - Do NOT write key-specific steps
+- `... is {present|absent}` is a Then ASSERTION - NEVER use it as a Given/precondition. To make a key exist as a precondition, use the SETUP step `the localStorage key {string} is set to {string}` (do not assert `is present` to "arrange" it; the `Background:` may have cleared it first)
+
+**PRECONDITION DISCIPLINE + BROWSER-SESSION vs API-AUTH** (composition):
+- Steps BEFORE a scenario's first `When` are preconditions - they must ESTABLISH state with setup steps (`... is set to ...`, `... is cleared`, `I am logged in as ...`, `I register with ...`), NEVER a Then-style assertion (`the localStorage key ... is present|absent`, `the {string} is visible`, `the response status is`). You cannot assert a state you have not arranged.
+- BE auth (the API `Authorization` header / a ScenarioState token) and the browser's localStorage session are DISTINCT mechanisms. Seed an FE session precondition via `the localStorage key {string} is set to {string}`, not a BE token step.
+- A browser side-effect (localStorage cleared by the app's AuthContext, redirect to a page) is triggered ONLY by a BROWSER action (`When I navigate to {string}`), never by a direct API-request step. Keep BE-contract ACs (`@be-only`) and FE-behaviour ACs (`@fe-only`/`@combined`) in SEPARATE scenarios.
 
 **CLICK**:
 - `When I click the {string}` - any button/link by visible text or aria-label
@@ -768,6 +778,8 @@ These step phrasings are canonical. Use them verbatim; do not invent per-instanc
 - This is the ONLY login step. Do NOT write per-persona login variants ("I am logged in as ragnar", "I am authenticated", "the user is signed in")
 - Use this step in the `Background:` of every scenario that requires authentication
 - **The body of this step is project-specific.** Adapt it to your project's auth endpoint and credential fixture file.
+- A scenario that exercises the login endpoint DIRECTLY for success must be REGISTER-FIRST and SELF-CONSISTENT: `Given I register with username "<unique>" and password "<P>"` then `When I login with username "<unique>" and password "<P>"` using the SAME creds. NEVER authenticate as a real/existing/seeded username with a guessed or literal password (you cannot know a pre-seeded account's real password) - that returns 401. A pre-seeded user is used only through the logged-in persona step, never a raw credential step.
+- REAL BODY FIELD NAMES: when a step sends a raw request body to the auth login/register route (`I send a POST request to "<auth route>" with body:` + a DataTable), the DataTable KEYS must be the app's REAL body field names (a login is typically `username` + `password`; the `username` field usually accepts a username OR an email VALUE). NEVER invent an alias key such as `identifier`, `user`, `login`, or `usernameOrEmail` - the endpoint does not read it and the request returns 400. Put a username-or-email VALUE under the real `username` key.
 
 **CANONICAL VERB ENFORCEMENT** (mandatory rewrites before any step text is accepted):
 - `renders` | `is loaded` | `is inspected` | `is displayed` -> use `is visible`
@@ -782,7 +794,11 @@ These step phrasings are canonical. Use them verbatim; do not invent per-instanc
 For every happy-path AC (one describing a successful user outcome), also generate ONE companion scenario tagged `@error-path @inferred-negative`:
 
 Trigger types:
-- Requires authentication -> unauthenticated or unauthorised access (HTTP 401/403 or redirect to login)
+- Requires authentication -> unauthenticated or unauthorised access (HTTP 401/403 or redirect to login). ONLY
+  for endpoints the app actually protects: confirm the route's handler is auth-gated (an auth middleware such
+  as `requireAuth`/`authenticate`) before asserting a 401/403 unauthenticated. A PUBLIC or optional-auth route
+  (no auth middleware, or an `optionalAuth`-style wrapper) returns 200 unauthenticated, so a 401 expectation
+  there is a spec-vs-code mismatch, not a test - skip it (or mark it `# REVIEW: spec-vs-code`).
 - Creates or submits data -> validation failure (missing required field, invalid format, or business-rule violation)
 - Retrieves a resource -> resource not found (empty state, 404, or no results)
 - Stateful action (add to basket, purchase, enrol) -> precondition not met (item unavailable, already purchased, quota exceeded)
@@ -906,6 +922,24 @@ REAL INTERFACE GROUNDING (auth, state, data): bind generated tests to the app's 
   password >= 8), not a generic `POST /api/users {username,password}`. Prefer REGISTER-FIRST (create a unique
   user, then reuse its returned token) so no pre-seeded account is required; if the step supplies only a
   username, derive a unique email (`<username>@example.com`) and a compliant password.
+- AUTH ROUTES CARRY CREDENTIALS ONLY - never a domain action. A `POST` to the login/register route carries
+  ONLY username/password (register also email). A domain action such as a challenge SUBMISSION posts its
+  payload (`{prompt}`/`{solution}`) to the ACTION route (e.g. `POST /api/challenges/{id}/submit`, after
+  obtaining an id), NEVER to `/api/auth/login` - the auth route ignores a `{prompt}` body and 400s. Bind every
+  action step to the route that implements it, per the app's real route list.
+- DUAL TEST-USER MODEL (when a populated test user is available): drive auth scenarios with ONE parameterized
+  step `Given I am logged in as {string}` and TWO personas - "a new user" (a FRESH zero-data account for
+  empty-state / registration / generic logged-in ACs; assert empty achievements, xp 0) and "the existing user"
+  (a PRE-SEEDED account WITH sample data for data-dependent ACs; assert against its REAL data, which you should
+  read from the app's GET endpoints before authoring). Register the fresh user ONCE per run (a BeforeAll /
+  global-setup style hook), reuse it across scenarios, and DELETE ONLY that fresh user after the whole run (via
+  a self-delete route if the app has one); never delete the pre-seeded user. A scenario contrasting the two uses
+  a Scenario Outline over the persona. When NO populated test user is available, use ONLY "a new user" - never
+  emit `"the existing user"` steps you cannot authenticate (they hard-fail on missing credentials).
+- FAIL-FAST the auth setup: the fresh-user register/global-setup hook should VERIFY the register -> login ->
+  token round-trip and FAIL LOUDLY (with the HTTP status + response body) when the app does not return a token,
+  so a mis-started or misconfigured app (e.g. a 5xx from a missing signing secret) aborts the run with one clear
+  message instead of every scenario failing its login precondition with no diagnostics.
 - STATE/TOKEN: store and read the auth token in the target framework's REAL shared-state field (e.g.
   `state.token` - the field its request helper + "I am authenticated" check use), never an invented
   `state.authToken`/`accessToken`/`jwt`.
@@ -913,6 +947,19 @@ REAL INTERFACE GROUNDING (auth, state, data): bind generated tests to the app's 
   files / enums, e.g. a category slug `whisperer`), never invented (`norse-basics` -> empty result).
 - NO PLACEHOLDERS: a regular Scenario must carry concrete literals - never leave a `{name}` or `<name>` token
   in step text/arguments (e.g. never a bare `"{username}"`); reserve `<...>` for Scenario Outline + Examples.
+- PAGE ROUTES + UI NAMES (frontend): a browser-navigation step's URL MUST be a real FRONTEND page route (`/`,
+  `/login`, `/dashboard`), read from the app's router - NEVER a backend `/api/...` endpoint (those are for
+  API-request steps; a browser cannot navigate to an API path). Navigate to the page THIS journey is about
+  (match its title/ACs to a route); do NOT default every FE scenario to `/login` - use `/login` only for a
+  login-specific scenario, and `/` (never `/login`) when unsure. Element/component names in visibility/click
+  steps MUST be REAL names from the app's rendered DOM (a component name, or a real heading / button / link /
+  label text) - do not invent one, and NEVER use a DESIGN-SPEC / Figma node name (e.g. "Login Card", "CTA
+  Primary", "Ghost Button", "Gjallarhorn (12% teaser)") that has no DOM counterpart, nor a name that
+  contradicts the journey (e.g. no "Register Card" on a login page). If you only have design labels, assert the
+  real on-page heading/button text instead.
+- BROWSER STORAGE NEEDS AN ORIGIN: a step that reads/writes localStorage/sessionStorage/cookies must FIRST
+  navigate to the app origin - web storage on a blank page (`about:blank`) throws `SecurityError`. Navigate,
+  set/read storage, then reload if the app must re-read it.
 
 PAGE CONTEXT IN RUNTIME ASSERTIONS
 WRONG: Then('no JavaScript runtime error is thrown on the Dashboard', ...)
@@ -980,11 +1027,22 @@ Then('the browser is redirected to {string}', async (url: string) => {
 
 ELEMENT VISIBILITY
 Then('the {string} is {word}', async (name: string, state: string) => {
-  const locator = page.locator(`[data-testid="${name}"], .${name}`).first();
-  if (state === 'visible') await expect(locator).toBeVisible();
-  else await expect(locator).toBeHidden();
+  // Resolve accessibility-first so it works on apps WITHOUT data-testids: testid, then role
+  // (button/link/heading) or visible text by accessible name; class/id only for a valid CSS identifier.
+  let locator = page.locator(`[data-testid="${name}"]`)
+    .or(page.getByRole('button', { name }))
+    .or(page.getByRole('link', { name }))
+    .or(page.getByRole('heading', { name }))
+    .or(page.getByText(name, { exact: false }));
+  if (/^[A-Za-z_][\w-]*$/.test(name)) locator = locator.or(page.locator(`.${name}, #${name}`));
+  const target = locator.first();
+  if (state === 'visible') await expect(target).toBeVisible();
+  else await expect(target).toBeHidden();
 })
-ONE file with {word} state parameter replaces all 'is visible' + 'is hidden' variants.
+ONE file with {word} state parameter replaces all 'is visible' + 'is hidden' variants. Do NOT use a
+testid/class-only selector - on an app with no data-testid it matches nothing; always include the role/text
+accessible-name fallback. Also: a page/route NAME (Login, Register) is not a DOM element - assert real
+on-page text/leaf components, never the page name.
 
 AUTHENTICATION
 Given('I am logged in as the test user', async function () {

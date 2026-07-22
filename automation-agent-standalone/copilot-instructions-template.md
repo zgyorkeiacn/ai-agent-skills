@@ -299,14 +299,16 @@ These phrasings are canonical. Use them verbatim:
 |---|---|
 | `When I navigate to {string}` | body: `page.goto` + `waitForLoadState('networkidle')` + `toHaveURL`. ONE file covers all navigation. |
 | `Then the browser is redirected to {string}` | click-triggered URL change only (not goto) |
-| `Then the {string} is visible` / `Then the {string} is hidden` | ONE file with `{word}` state param covers both |
+| `Then the {string} is visible` / `Then the {string} is hidden` | ONE file with `{word}` state param covers both. Resolve the name ACCESSIBILITY-FIRST (testid -> `getByRole` button/link/heading or `getByText` -> class/id), NOT testid/class-only, so it binds on a testid-less app. A page/route name (Login, Register) is NOT a DOM element - assert real on-page text, never the page name |
 | `Then the {string} modal is {word}` (visible/hidden) | do not create per-state files |
 | `When I close the {string} modal` | |
 | `Given the localStorage key {string} is set to {string}` | |
 | `Given the localStorage key {string} is cleared` | |
-| `Then the localStorage key {string} is {word}` (present/absent) | do not write key-specific steps |
+| `Then the localStorage key {string} is {word}` (present/absent) | ASSERTION only - do not write key-specific steps; NEVER use `is present/absent` as a Given/precondition (seed with `... is set to ...` instead) |
 | `When I click the {string}` | any button/link by visible text or aria-label |
-| `Given I am logged in as the test user` | ONE file; project-specific body; use in Background for auth scenarios |
+| `Given I am logged in as the test user` | ONE file; project-specific body; use in Background for auth scenarios. A direct-login SUCCESS scenario must be REGISTER-FIRST + self-consistent (`Given I register with username "<unique>" and password "<P>"` then `When I login ...` with the SAME creds); NEVER a real/existing/seeded username + guessed password (401). Pre-seeded users are used only via the persona step, never a raw credential step. A raw `POST <auth route> with body:` DataTable must use the REAL body field names (login = `username` + `password`; `username` accepts a username OR email VALUE) - never an invented alias like `identifier` (400) |
+
+**Precondition discipline + browser-session vs API-auth:** steps before a scenario's first `When` must ESTABLISH state with setup steps, never a Then assertion (`localStorage ... is present/absent`, `the {string} is visible`, `the response status is`). BE auth (API `Authorization` header) and the browser localStorage session are DISTINCT - seed an FE session with `the localStorage key {string} is set to {string}`. A browser side-effect (localStorage cleared, redirect) is driven only by `When I navigate to {string}`, never by an API-request step; keep `@be-only` and `@fe-only`/`@combined` ACs in separate scenarios.
 
 **Canonical verb enforcement (mandatory before accepting any step text):**
 - `renders` / `is loaded` / `is inspected` / `is displayed` -> `is visible`
@@ -322,7 +324,10 @@ For every happy-path AC, also generate ONE companion scenario:
 Tag format: `@<journey-tag(s)> @US_<storyId> @AC_<seq>_err @error-path @inferred-negative`
 
 Trigger types:
-- Requires authentication -> unauthenticated/unauthorised access (401/403 or login redirect)
+- Requires authentication -> unauthenticated/unauthorised access (401/403 or login redirect). ONLY when the
+  route is actually auth-gated (an auth middleware like `requireAuth`/`authenticate`). A public/optional-auth
+  route returns 200 unauthenticated, so a 401 expectation there is a spec-vs-code mismatch - skip it or mark
+  `# REVIEW: spec-vs-code`.
 - Creates or submits data -> validation failure (missing field, invalid format, business rule)
 - Retrieves a resource -> resource not found (empty state, 404, no results)
 - Stateful action (add to basket, purchase, enrol) -> precondition not met
