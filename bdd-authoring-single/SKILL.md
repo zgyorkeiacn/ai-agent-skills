@@ -445,7 +445,10 @@ Compose complete Gherkin feature files for one or more journeys (or from raw ACs
 1. **Format**: emit a complete `.feature` as plain text - no Markdown fences, no prose, and NO
    reasoning/analysis preamble above the header (no paragraphs, `**Derived ACs:**`, `- AC_N:`
    bullets, `---`, or `##` headings). The FIRST line must be the feature-tag line or `Feature:` -
-   a leading preamble breaks the Gherkin parser. Step keywords are ONLY
+   a leading preamble breaks the Gherkin parser. Emit EXACTLY ONE `Feature:` block and nothing else -
+   no reasoning, notes, or "Let me..."/"Actually..." lines ANYWHERE in the file (not just the top),
+   and no earlier drafts; if you reconsider, output ONLY the final feature (multiple `Feature:` blocks
+   are invalid Gherkin and fail to parse). Step keywords are ONLY
    Given/When/Then/And/But/`*` - never `Or`/`Nor` (Gherkin has no disjunction; use And/But).
 2. **Structure**: feature-tag line -> `Feature: <name>` -> 1-line description.
 3. **Background dedup**: when 2+ scenarios share the same leading Given(s) / initial When, lift
@@ -472,7 +475,8 @@ Compose complete Gherkin feature files for one or more journeys (or from raw ACs
    new step. If a strong match genuinely cannot be used, document why before creating a new one.
 10. **Step count/quality**: aim 6-15 steps; a 3-step "when exercised, then it works" scenario
     is unacceptable. A tester must be able to execute the scenario manually with no other
-    context.
+    context. Never repeat the SAME step consecutively (e.g. the same `is visible` assertion 4x) -
+    assert each thing once.
 11. **Concrete data**: use realistic values in plain Scenarios (no angle-bracket placeholders);
     use `Scenario Outline` + `Examples` only where it genuinely reduces duplication.
 12. **Scope guardrail**: treat the detected in-house API surface as the only APIs a step may
@@ -482,6 +486,15 @@ Compose complete Gherkin feature files for one or more journeys (or from raw ACs
     step (`renders`/`is loaded`/`is displayed`/`is shown` -> `is visible`; one `{word}` state
     parameter covers a polarity pair). Optional three-axis execution tags
     (`@be-only`/`@fe-only`/`@combined`) only when existing feature files already use them.
+14. **Precondition discipline**: steps BEFORE a scenario's first `When` are preconditions - they must
+    ESTABLISH state with setup steps (`... is set to ...`, `... is cleared`, `I am logged in as ...`,
+    `I register ...`), NEVER a Then-style ASSERTION (`the localStorage key ... is present|absent`,
+    `the {string} is visible`, `the response status is`). You cannot assert a state you have not arranged.
+15. **BE-contract vs FE-behaviour coherence**: the BE API auth token (Authorization header / state) and the
+    browser's localStorage session are DISTINCT. A browser side-effect (localStorage cleared by AuthContext,
+    redirect) is triggered ONLY by a browser action (`I navigate to "<FE route>"`), NEVER by a direct
+    API-request step - keep BE-contract ACs (`@be-only`) and FE-behaviour ACs (`@fe-only`/`@combined`: seed +
+    navigate + assert the browser effect) in SEPARATE scenarios.
 
 **AC coverage validation** (after composing): every expected AC has exactly one covering
 scenario; no AC covered twice (unless legitimately collapsed); every `@AC_<n>` maps to a real
@@ -541,9 +554,28 @@ reuse if found; otherwise add to "needs implementation".
    framework's real state field (e.g. `state.token`, not `state.authToken`); draw path-param/enum values from
    the app's real ids (e.g. a real category slug), never invented; never leave a `{name}`/`<name>` placeholder
    in a plain Scenario - write a concrete literal.
+   **Login self-consistency + real body fields**: a direct login-endpoint SUCCESS scenario must register-first
+   with the SAME creds it then logs in with; NEVER authenticate as a real/existing/seeded username with a
+   guessed/literal password (its real password is env-only -> 401) - a pre-seeded user is authenticated ONLY via
+   `Given I am logged in as "the existing user"`, never a raw credential step. A `with body:` DataTable for the
+   auth route must use the REAL body field names (login = `username` + `password`; `username` takes a
+   username-or-email value), never an invented alias like `identifier` (-> 400).
+   **Dual test-user model** (when a populated user is available): drive auth via ONE parameterized
+   `Given I am logged in as {string}` step with two personas - "a new user" (fresh, zero-data - empty-state ACs)
+   and "the existing user" (pre-seeded, populated - data-dependent ACs, asserted against its REAL data read from
+   the app first). Register the fresh user ONCE (before-all hook), reuse it, and delete ONLY it after the run
+   (self-delete route if present); never delete the pre-seeded user. Contrast the two via a Scenario Outline.
    **Reused steps are candidates, not guarantees**: a pre-existing/library step (esp. a generic auth step) may
    hit the wrong endpoint or read the wrong token field for THIS app - verify it against the real
    routes/contract before reusing; if it does not fit, generate a grounded replacement instead of trusting it.
+   **Real page routes + UI names (frontend)**: a browser-navigation step's URL MUST be a real FRONTEND page
+   route (`/`, `/login`, `/dashboard`), read from the app's router - NEVER a backend `/api/...` endpoint (those
+   are for API-request steps; a browser cannot navigate to an API path). Element/component names in
+   visibility/click steps MUST be real names from the app's components - do not invent one that contradicts the
+   journey (e.g. no "Register Card" on a login page).
+   **Browser storage needs an origin**: a step that reads/writes localStorage/sessionStorage/cookies must FIRST
+   navigate to the app origin - web storage on a blank page (`about:blank`) throws `SecurityError`. Navigate,
+   set/read storage, then reload if the app must re-read it.
 7. **Missing locators**: mark any UI locator absent from the page objects with a language-
    appropriate `MISSING_LOCATOR: <name>` comment.
 8. **Category tag** (optional): top-of-file comment `// @functional|@nonfunctional @frontend|@backend`.
@@ -584,8 +616,13 @@ When('I navigate to {string}', async ({ page }: ScenarioState, url: string) => {
   await expect(page).toHaveURL(new RegExp(url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 });
 Then('the {string} is {word}', async ({ page }: ScenarioState, name: string, state: string) => {
-  const loc = page.locator(`[data-testid="${name}"], .${name}`).first();
-  state === 'visible' ? await expect(loc).toBeVisible() : await expect(loc).toBeHidden();
+  // accessibility-first (works without data-testids); {name} must be a real element, not a page NAME.
+  let loc = page.locator(`[data-testid="${name}"]`)
+    .or(page.getByRole('button', { name })).or(page.getByRole('link', { name }))
+    .or(page.getByRole('heading', { name })).or(page.getByText(name, { exact: false }));
+  if (/^[A-Za-z_][\w-]*$/.test(name)) loc = loc.or(page.locator(`.${name}, #${name}`));
+  const t = loc.first();
+  state === 'visible' ? await expect(t).toBeVisible() : await expect(t).toBeHidden();
 });
 When('I click the {string}', async ({ page }: ScenarioState, name: string) => {
   await page.getByRole('button', { name }).or(page.getByText(name)).first().click();
