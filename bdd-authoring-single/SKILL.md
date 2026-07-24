@@ -141,6 +141,49 @@ schema.
 
 ---
 
+## Resume & input fingerprint (automatic)
+
+Long runs are resumable so a crash, cancel, or context cut-off does not restart from scratch and
+re-spend tokens. State lives in a small ledger `./docs/<slug>/resume.json`; `--fresh` ignores it
+(and the cached baseline) and runs clean.
+
+Two signatures gate reuse. Compute them at run start and recompute at the start of every later turn:
+- `storySig` = `hash(ADO story URL(s) + fetched story title + AC text)`, or `hash(pasted AC text)`
+  when ACs were pasted. Governs the `story` (AC extraction) and `plan` (journey) outputs.
+- `derivationSig` = `hash(repo signature + supplementary-doc paths + stepScope/testLayer +
+  mandatory tags)`. Repo signature = `git -C <repoPath> rev-parse HEAD` when it is a git repo, else
+  a sorted listing of framework files (package.json / pom.xml / build.gradle / ...) + test-dir file
+  count. Governs the `analyze` (baseline), `bdd` (scenarios), and `steps` (step-def) outputs.
+
+Where no shell/hash is available, record a stable text descriptor instead of a hash (URL + story
+last-modified + doc-path list + detected stack).
+
+Ledger shape:
+```json
+{ "runId": "<ts>", "storySig": "<s>", "derivationSig": "<d>",
+  "done": { "story": true, "analyze": true, "plan": true,
+            "bdd": ["<journeyId>", "..."], "steps": ["<step-def file>", "..."],
+            "coverage": false } }
+```
+
+On entry / each turn:
+1. `--fresh` -> ignore the ledger + existing artifacts; run clean; rewrite the ledger.
+2. Read the ledger; recompute both signatures.
+   - **both match** -> resume: skip every stage/unit already in `done`; run only what remains.
+   - **storySig matches, derivationSig changed** -> KEEP `story` + `plan` (and their `done` marks);
+     clear `analyze` / `bdd` / `steps` / `coverage` from `done` and regenerate them; update
+     `derivationSig`. The saving: a repo/doc/style change no longer re-fetches the story or re-plans
+     journeys.
+   - **storySig changed** -> ACs/journeys are stale; after confirming when artifacts already exist,
+     start a fresh run (new `runId`) and regenerate everything.
+3. **Artifact-aware skip**: before (re)generating any unit, if its output file already exists on
+   disk and the governing signature is unchanged, mark it done and skip the LLM call - so resume
+   works even when the ledger was lost but the `.feature`/journey artifacts remain.
+4. Write the ledger after each stage/unit completes (never lose more than the in-flight unit); keep
+   it on success so a later re-run with unchanged inputs is a no-op (everything skipped).
+
+---
+
 ## Mode: story
 
 Fetch an ADO work item graph and extract acceptance criteria. If `AZURE_DEVOPS_PAT` is unset
@@ -780,8 +823,11 @@ Record a [Work Log](#work-log-automatic) stage entry: AC count classified.
 ## Mode: generate
 
 Full pipeline: `story -> analyze -> plan -> bdd -> steps -> coverage`, feeding each stage into
-the next. Flags: `--repoPath <path>`, `--stepScope`, `--testLayer`, `--no-step-gen` (stop after
-bdd), `--fresh` (ignore cache), `--yes` (skip the clarify gate), `--no-branch` (skip
+the next. Resume-aware (see [Resume & input fingerprint](#resume--input-fingerprint-automatic)):
+skip any stage/journey already recorded `done` in `./docs/<slug>/resume.json` unless its governing
+signature changed; a derivation-only change keeps the story + journeys and recomposes the rest.
+Flags: `--repoPath <path>`, `--stepScope`, `--testLayer`, `--no-step-gen` (stop after
+bdd), `--fresh` (ignore cache + resume ledger), `--yes` (skip the clarify gate), `--no-branch` (skip
 [auto-branch](#auto-branch-before-any-write)), `--no-framework-sync` (skip framework convention
 sync), `--no-work-log` (skip the [Work Log](#work-log-automatic)), `--operator-name`/
 `--experience`/`--area` (operator identity for the log). Do NOT otherwise auto-chain
