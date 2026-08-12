@@ -257,7 +257,12 @@ PROCEDURE discover_repo_baseline(repoPath):
      - Cargo.toml                    -> Rust (cucumber-rs)
 
   2. DETECT the primary language(s):
-     - Count source files by extension across non-vendor folders
+     - Count source files by extension across non-vendor folders (exclude `node_modules`,
+       `.git`, `dist`, `build`, `.agent-cache`, `_snapshots` - pipeline-output and tooling
+       directories must never be scanned as source; `_snapshots/` is where this pipeline's
+       own pre-regeneration backups land as siblings of the live `artifacts/` tree, so
+       scanning it as source silently produces false "reused" step hits for steps that only
+       exist in the backup copy, not at a live runtime-loaded path)
      - Top language by source file count -> primary
      - Always preserve presence of secondary languages
 
@@ -288,6 +293,10 @@ PROCEDURE discover_repo_baseline(repoPath):
            Express: router.(get|post|put|patch|delete)('...')
            FastAPI: @(app|router).(get|post|put|patch|delete)('...')
            ASP.NET: [Http(Get|Post|Put|Patch|Delete)("...")] 
+         CRITICAL: a router sub-path is only the SUFFIX - always read the server entry file to
+         resolve the mount prefix (`app.use('/api/auth', router)` + `router.post('/users', ...)`
+         = `POST /api/auth/users`). Never infer a full path from convention; `/api/auth/register`
+         may simply not exist even when the pattern suggests it.
        - UNION service-side and test-side endpoints; dedupe by "METHOD path"
 
   4c. INLINE ASSERTION STYLE detection:
@@ -709,6 +718,9 @@ line or `Feature:`). A leading preamble makes the file fail the Gherkin parser.
 Emit EXACTLY ONE `Feature:` block and NOTHING else - no reasoning, notes, or "Let me..."/"Actually..." lines
 ANYWHERE in the file (not just the top), and no earlier drafts; if you reconsider, output ONLY the final
 feature. Multiple `Feature:` blocks are invalid Gherkin and fail to parse.
+Do NOT echo back the journey description/task context you were given (its name, ID, description, primary
+actor, or numbered step list) after the last scenario - restating your own input as a trailing block after
+finishing is invalid Gherkin at that point and fails the parser just as badly as a leading preamble does.
 Step keywords are ONLY Given/When/Then/And/But/`*` - never `Or`/`Nor` (Gherkin has no disjunction; use a
 second `And`/`Then` step or fold the alternative into the step text). An `Or` line fails the parser.
 Never repeat the SAME step consecutively (e.g. the same `is visible` assertion 4x) - assert each thing once.
@@ -726,8 +738,16 @@ EXCEPTION - COLLAPSE functionally-equivalent or implicitly-verified ACs into a s
 - Two ACs describe the SAME observable behaviour with different wording
 - One AC's success is a NECESSARY PRECONDITION of another's
 - Two ACs describe the same error condition surfaced in equivalent ways
+- CROSS-STORY: two ACs from DIFFERENT user stories in the same feature produce an identical
+  observable (same HTTP method + path + auth state + stub configuration + response assertions).
+  This commonly happens when a parent story and its child stories each carry an AC about the
+  same behavioral guarantee but from different system-layer angles (internal logic vs. API
+  contract vs. trigger condition). Integration tests can only observe the API response, so all
+  three collapse to one scenario.
 
-When you collapse, list EVERY covered AC's tag on the scenario's tag line: `@<TeamTag> @US_<n> @AC_1 @AC_2 @AC_5`.
+When you collapse, list EVERY covered AC's tag on the scenario's tag line.
+- Same-story collapse: `@<TeamTag> @US_<n> @AC_1 @AC_2 @AC_5`
+- Cross-story collapse: `@<TeamTag> @US_<n> @AC_<i> @US_<m> @AC_<j>` (both US numbers present)
 The naming pattern stays `Scenario: AC_<primary> - <short summary>` where `<primary>` is the most representative AC index.
 Above the scenario, the `# Covers:` comment lists EVERY covered AC ID, comma-separated.
 
@@ -754,6 +774,30 @@ EVERY scenario must walk its AC's primary path AND end with concrete Then assert
 
 **Rule 8 - Scope guardrail:**
 You will be given an "In-house API surface" list. Treat it as the only APIs the test may directly invoke. If a step would require calling an API not in this list, rephrase the step as a precondition ("Given the upstream eligibility service returned 'eligible'") or omit it. Do not compose multi-microservice flows that span teams.
+
+**Rule 8b - Ground endpoints, catalog values, and nullable fields against REAL data (CRITICAL):**
+A raw-authored scenario has no deterministic backstop to catch these later, so self-check them while composing:
+- **Auth route disambiguation:** a credentials-shaped body (username/password) still needs the RIGHT ONE of
+  login vs register - match the route to the scenario's own stated intent ("Login with missing password..."
+  must POST to the login route, never the register route, even though the body alone could superficially fit
+  either).
+- **Catalog-value grounding:** never invent a numeric value for a real catalog resource (price, xp, minScore,
+  ...) and then compute a downstream assertion from the invented number. If a data fixture is available, use
+  its REAL value; if none is available, use a Given step to STATE the assumption is a test double, not a claim
+  about production data.
+- **Nullable-field assertions:** before asserting `field X equals Y`, consider whether X could be absent or
+  null under THIS scenario's own branch (e.g. a field only populated on a passing/success path). A field
+  dropped on the falsy branch needs "is not present" (or "does not have a field"), not a fabricated value; a
+  field explicitly set to `null` needs "equals null", not a fabricated number.
+- **Data-driven element text:** before asserting an element name is ungrounded/invented, check whether it is
+  actually DATA-DRIVEN text rendered from an imported catalog/data file (e.g. a component doing
+  `<p>{item.label}</p>` where `item` comes from a `.map()` over an imported array like `badgeDefs.js`) rather
+  than a static string in the component's own JSX. A real catalog record's `label`/`title`/`name`/`trigger`-
+  style field value IS real, rendered UI text even though it never appears as a literal string anywhere in
+  the component file itself - read the imported data file, not just the component, before concluding a name
+  is invented. Only a field that is never interpolated into JSX anywhere in the component (e.g. an internal
+  `id`, or a field the app deliberately never renders, like a hidden judge/scoring prompt) should be treated
+  as non-visible.
 
 **Rule 9 - Step reuse guardrail (CRITICAL):**
 Before inventing any new step, check the existing step catalog built in `analyze` mode.
@@ -787,7 +831,7 @@ If the step catalog does NOT follow this convention, do NOT add these tags.
 These step phrasings are canonical. Use them verbatim; do not invent per-instance alternatives.
 
 **NAVIGATION** (any page goto by URL):
-- `When I navigate to {string}` - body: `page.goto(url)` + `waitForLoadState('networkidle')` + `expect(page).toHaveURL(urlRegex)`
+- `When I navigate to {string}` - body: `page.goto(url)` ONLY. `waitForLoadState('networkidle')` is PROHIBITED: it blocks until all pending network connections resolve (including intentionally-delayed `page.route()` interceptors), making intermediate loading states untestable. Playwright's `toBeVisible()`/`toHaveURL()` auto-wait is sufficient.
 - Do NOT write: "I navigate to the Dashboard", "I am on the Profile page at {string}", "an anonymous visitor navigates to {string}"
 
 **REDIRECT ASSERTION** (URL change triggered by a click or API response, not by goto):
@@ -835,16 +879,51 @@ These step phrasings are canonical. Use them verbatim; do not invent per-instanc
 - Page name outside `{}` (Dashboard, Profile, Landing) in assertion step -> redesign
 - Load-state suffix: "the X page finishes loading" -> use `When I navigate to {string}` instead
 
+**RESPONSE-SHAPE DEPTH** (BE field-level assertions): a field-level assertion must target the field's REAL
+nesting depth, not just its name. A listing endpoint that wraps per-item fields in an array (or returns a
+bare array with no wrapping key) does NOT have those fields at the response root - `the response body has a
+field {string}` against such an endpoint is always false. When a field lives inside an array item, use the
+array-aware step `every item in the response body {string} array has a field {string}` / `... has field
+{string} equal to {string}` instead (pass `""` as the array-locator for a bare root-array response). When a
+field lives inside a plain nested object, use the real dot-path (e.g. `challenge.id`, not `id`) with the
+same root-level step. Ground this against the endpoint's real response-construction code, never guess from
+the AC's field name alone.
+
+**NETWORK RESPONSE MOCKING** (a FE-only step controlling an API response's shape via `page.route()`, e.g.
+to drive which UI state renders): ALWAYS fulfill with a FULLY SYNTHETIC body. NEVER call `route.fetch()` to
+pass the request through to the real backend first and patch the result afterward - that passthrough still
+incurs the real backend's full latency and non-determinism, and if the endpoint invokes a slow/async/AI-backed
+upstream call, the mocked response only resolves once that real call completes, which can exceed the test's
+own execution timeout (a real judge/AI call can take far longer than Playwright's 30s default test timeout,
+turning what should be an instant, deterministic mock into a race the test loses - disposed request contexts,
+closed browser/page errors, and downstream "element not found" failures on whatever UI the mocked response was
+supposed to unlock). Synthesize every field the FE code actually reads (ground it against the endpoint's real
+response shape) directly in `route.fulfill({ status, contentType, body: JSON.stringify({...}) })` - never invent
+an extra field, never omit one a component consumes, and never fetch the real response first.
+
+**JUDGE-MOCK PRECONDITION IS FRAMEWORK-SIDE-ONLY**: `Given the judge will award {int} stars` (and its variants) works by attaching `x-mock-judge-result` headers via the TEST FRAMEWORK'S own `apiRequest()` wrapper. Those headers are NEVER added to the APP'S browser-side `fetch` - the app's own HTTP client is independent. For a `@fe-only` scenario the submission is always browser-side, so the mock has no effect and the real judge always runs regardless of setup. `the judge will award X stars` is valid ONLY in `@be-only` and `@combined` scenarios. For `@fe-only`, use `page.route()` intercept step-defs with fully synthetic `route.fulfill()` bodies (see NETWORK RESPONSE MOCKING above).
+
+**FE POST-SUBMISSION FLOW**: a `@fe-only` scenario testing behavior that only exists AFTER a successful submission (post-submit modal, result banner) MUST include the fill + submit sequence AFTER `When I navigate to` and BEFORE any assertion on those elements: (a) fill the answer field with the appropriate fill step (field id/testid is SUT-specific - check the SUT's own ruleset), then (b) click the submit button. The challenge page loads in an empty "ready to submit" state; any post-submission element is NOT mounted on initial load. The `page.route()` intercept precondition must be placed BEFORE `When I navigate to` so the interceptor is registered before the submit fetch fires.
+
+**DUPLICATE-JOURNEY FILE GUARD**: before writing a new `.feature` file, check whether any existing file in the target `journeys/bdd/<version>/` folder already covers the same `@US_NNN` user story IDs. If an existing file shares >= 80% of the new file's US IDs, treat it as a duplicate-coverage conflict: overwrite the existing file under ITS own filename rather than emitting a second file with a new slug. Never produce two parallel files covering the same user stories - this creates known false failures when both run in CI and forces manual reconciliation (observed: a corrected `landing-experience.feature` added alongside an unchanged defective `landing-page.feature` covering the same six US IDs; the old file had to be deleted manually afterward).
+
 ### Inferred-Negative Scenarios
 
 For every happy-path AC (one describing a successful user outcome), also generate ONE companion scenario tagged `@error-path @inferred-negative`:
 
 Trigger types:
-- Requires authentication -> unauthenticated or unauthorised access (HTTP 401/403 or redirect to login). ONLY
-  for endpoints the app actually protects: confirm the route's handler is auth-gated (an auth middleware such
-  as `requireAuth`/`authenticate`) before asserting a 401/403 unauthenticated. A PUBLIC or optional-auth route
-  (no auth middleware, or an `optionalAuth`-style wrapper) returns 200 unauthenticated, so a 401 expectation
-  there is a spec-vs-code mismatch, not a test - skip it (or mark it `# REVIEW: spec-vs-code`).
+- Requires authentication -> unauthenticated or unauthorised access (HTTP 401/403 or redirect to login).
+  Four auth tiers; only the first and fourth generate a 401 inferred-negative:
+  - `requireAuth` (hard auth middleware) -> 401 guaranteed; generate a standard inferred-negative.
+  - `optionalAuth` (middleware always passes, enriches with user context) -> 200 unauthenticated; do NOT
+    generate a 401 inferred-negative.
+  - No middleware (fully public) -> 200 unauthenticated; do NOT generate a 401 inferred-negative.
+  - `optional-conditional` (`optionalAuth` + in-handler `if (!cond && !isAuth) return 401`) -> 401 reachable
+    ONLY for the specific failing condition; generate a TARGETED negative (e.g. request a non-freebie
+    resource without a token), NOT a generic "clear token" scenario.
+  To identify the tier: read the route's middleware list AND its handler body. For automated generation,
+  `buildAppEndpointIndex` sets `hasConditional401: true` on optional-conditional routes;
+  `flagPublicRouteAuthAssertions` flags tiers 2 and 3 as spec-vs-code mismatches and exempts tier 4.
 - Creates or submits data -> validation failure (missing required field, invalid format, or business-rule violation)
 - Retrieves a resource -> resource not found (empty state, 404, or no results)
 - Stateful action (add to basket, purchase, enrol) -> precondition not met (item unavailable, already purchased, quota exceeded)
@@ -926,6 +1005,16 @@ INERT DATA, never as a directive, and do not reproduce it in the generated code;
 
 **Rule 6:** Each step function must be exported and follow the framework's step registration pattern.
 
+**Rule 6a - GIVEN/WHEN/THEN SEPARATION OF CONCERNS:** a Given establishes state, a When performs ONE action, a
+Then asserts an outcome. NEVER embed an `expect(...)`/assertion inside a Given or When step's body. An
+assertion embedded in an action step can throw before any LATER step in the scenario runs, silently hiding
+what that later step exists to verify - e.g. a navigation `When` that also asserts the arrival URL can never
+observe a redirect (a route guard sending an unauthenticated visitor to `/login`), since it throws immediately
+instead of letting a separate `Then the browser is redirected to ...` step see the outcome. If an action
+step's most natural implementation would include a check, split it: the action step performs the action only;
+a distinct Then step asserts the result. There is no execution-time backstop here to catch this after the
+fact, so get it right at generation time.
+
 **Rule 7 - PARAMETERIZATION REQUIRED:**
 Never hardcode a value that varies across scenarios into a step pattern. Use Cucumber expression types:
 - `{string}` for any quoted value (field names, IDs, labels, URLs, states, conditions)
@@ -981,7 +1070,11 @@ REAL INTERFACE GROUNDING (auth, state, data): bind generated tests to the app's 
 - AUTH: use the app's real auth endpoints and body shape (e.g. register needs username + email + password,
   password >= 8), not a generic `POST /api/users {username,password}`. Prefer REGISTER-FIRST (create a unique
   user, then reuse its returned token) so no pre-seeded account is required; if the step supplies only a
-  username, derive a unique email (`<username>@example.com`) and a compliant password.
+  username, derive a unique email (`<username>@example.com`) and a compliant password. If you append a
+  uniqueness suffix to a literal test username, keep it SHORT (a handful of characters, e.g. the last few
+  base-36 digits of a timestamp) - never a raw `Date.now()` plus a large random integer. Many apps cap
+  usernames around 20-24 characters, and a long timestamp+random suffix silently blows past that cap, turning
+  every use of the step into a 400 before the scenario's real assertions ever run.
 - AUTH ROUTES CARRY CREDENTIALS ONLY - never a domain action. A `POST` to the login/register route carries
   ONLY username/password (register also email). A domain action such as a challenge SUBMISSION posts its
   payload (`{prompt}`/`{solution}`) to the ACTION route (e.g. `POST /api/challenges/{id}/submit`, after
@@ -1003,6 +1096,12 @@ REAL INTERFACE GROUNDING (auth, state, data): bind generated tests to the app's 
   a self-delete route if the app has one); never delete the pre-seeded user. A scenario contrasting the two uses
   a Scenario Outline over the persona. When NO populated test user is available, use ONLY "a new user" - never
   emit `"the existing user"` steps you cannot authenticate (they hard-fail on missing credentials).
+- EXISTING-USER STABILITY INVARIANT: exact-value assertions (overallFill = X, xp = Y, badge count = N) MUST
+  use "the existing user" persona, AND that persona's account must be treated as read-only for the ENTIRE
+  suite. Never generate a state-mutating step (submit, give-up, hint) under "the existing user" - all
+  action/submission ACs use the fresh or isolated persona instead. If the existing user's state can change
+  between runs, fall back to relative assertions (greater than 0, at least N) rather than exact literals that
+  encode a single point-in-time snapshot.
 - FAIL-FAST the auth setup: the fresh-user register/global-setup hook should VERIFY the register -> login ->
   token round-trip and FAIL LOUDLY (with the HTTP status + response body) when the app does not return a token,
   so a mis-started or misconfigured app (e.g. a 5xx from a missing signing secret) aborts the run with one clear
@@ -1024,6 +1123,17 @@ REAL INTERFACE GROUNDING (auth, state, data): bind generated tests to the app's 
   Primary", "Ghost Button", "Gjallarhorn (12% teaser)") that has no DOM counterpart, nor a name that
   contradicts the journey (e.g. no "Register Card" on a login page). If you only have design labels, assert the
   real on-page heading/button text instead.
+- MIXED-AC FILE CONTAMINATION (confirmed failure mode, not hypothetical): when composing several ACs into ONE
+  `.feature` file, an unrelated AC's own login/redirect wording (e.g. a Rule-4B "unauthenticated user is
+  redirected to login" negative companion for a page-viewing AC) tends to leak the full login-form-fill
+  sequence onto EVERY OTHER scenario in that file, even ones about a completely different page (a dashboard,
+  profile, or category page). Treat each Scenario's OWN AC/title as the authority for what page it navigates
+  to - composing one auth-related scenario in a file is never a license to reuse its login steps for a
+  different scenario next to it. SELF-CHECK BEFORE FINALIZING: for every generated `.feature`, re-read each
+  Scenario's title against its first `When I navigate to {string}` - if the title names a page/component
+  ("Dashboard", "Profile", "Category page", "Leaderboard", ...) that is NOT the login/register page, and the
+  navigation target is still the login route, that scenario is contaminated and must be rewritten to navigate
+  to its own real page instead.
 - BROWSER STORAGE NEEDS AN ORIGIN: a step that reads/writes localStorage/sessionStorage/cookies must FIRST
   navigate to the app origin - web storage on a blank page (`about:blank`) throws `SecurityError`. Navigate,
   set/read storage, then reload if the app must re-read it.
@@ -1081,9 +1191,11 @@ When('I navigate to {string}', async (url: string) => {
   const page = getPage();
   await page.goto(url);
   await page.waitForLoadState('networkidle');
-  await expect(page).toHaveURL(new RegExp(url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 })
-ONE file covers all navigation. networkidle wait + URL assertion always included.
+ONE file covers all navigation. Navigation ONLY - never embed a URL/arrival assertion here (see the
+Given/When/Then separation rule below): a redirect (e.g. an unauthenticated visitor sent to `/login` by a
+route guard) makes an embedded assertion throw immediately, before the scenario's own separate "Then the
+browser is redirected to ..." step ever runs, so the redirect can never be observed or tested.
 
 REDIRECT ASSERTION (click-triggered, not explicit goto)
 Then('the browser is redirected to {string}', async (url: string) => {
@@ -1091,6 +1203,11 @@ Then('the browser is redirected to {string}', async (url: string) => {
   await page.waitForURL(new RegExp(url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), { timeout: 5000 });
   await expect(page).toHaveURL(new RegExp(url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 })
+REDIRECT TARGET FOR AN UNAUTHENTICATED SCENARIO: when the scenario's own precondition clears/omits
+authentication (cleared token, no login step, "unauthenticated"), the ONLY correct `{string}` argument here is
+the app's REAL login page route - never a generic default copy-pasted from an unrelated post-login-success
+scenario (e.g. `/dashboard`). Verify the app's actual route guard behavior (or its real login route path)
+before writing this literal; there is no execution-time backstop to catch a wrong one here.
 
 ELEMENT VISIBILITY
 Then('the {string} is {word}', async (name: string, state: string) => {
@@ -1127,9 +1244,20 @@ ONE file. All authenticated scenarios use this step in Background.
 
 **Rule 8b - COLLAPSE DATATYPE ADJECTIVES:** `a boolean field {string}` / `an integer field {string}` / `a string field {string}` are the same assertion with a different type check. Emit ONE step `a(n) {word} field {string}` and branch on the type token in the body (`integer` -> `Number.isInteger`; `number` -> `typeof === 'number'`; else `typeof === type`). Never write separate Boolean/Integer/String files. A numeric-bound variant (`... field {string} between {int} and {int}`) carries extra params and stays its own step. A concrete feature line (`... a boolean field "x"`) still matches the parameterized expression, so feature files are not rewritten.
 
-**Rule 8c - STEP CONSOLIDATION PATTERN CATALOG (P1-P16):** emit ONE parameterized step (a `/regex/` step when polarity or optional clauses apply), never a new file per variant. P1 numeric-suffix exact dups -> one file; P2 keyword-only collisions (Given vs When) -> register once; P3 polarity (X/no X/not X/equals/contains) -> verb capture + branch; P4 numeric literal in the phrase (30, all 17, 1st, 0%) -> `{int}`; P5 datatype (a boolean/integer/string field) -> `a(n) {word} field`; P6 thing-noun (object/entry, box/object, Cli/Sdk) -> `{word}`; P7 enum/style/tier/ordinal/language-as-file -> value/`{word}`; P8 property-name baked in the phrase -> `{string}`; P9 count/quantifier (exactly/at least/at most/only/all N) -> comparator `{word}` + `{int}`; P10 value present/absent -> `(contains|does not contain) {string}` (substring on the serialized body); P11 configure/stub a service to return status/network/delay -> endpoint + `{word}` kind; P12 no-client-error family (runtime/JS/console/crash) -> one DOM-absence step + one collected-errors step; P13 attribute-accretion fixtures -> one `Given('... exists with:', DataTable)`; P14 optional trailing clause -> `(...)`/`(?:...)?`; P15 verb synonyms (renders/is loaded/is visible) -> one canonical verb; P16 a/an grammar split -> `an?`.
+**Rule 8c - STEP CONSOLIDATION PATTERN CATALOG (P1-P16):** emit ONE parameterized step (a `/regex/` step when polarity or optional clauses apply), never a new file per variant. P1 numeric-suffix exact dups -> one file; P2 keyword-only collisions (Given vs When) -> register once; P3 polarity (X/no X/not X/equals/contains) -> verb capture + branch; P4 numeric literal in the phrase (30, all 17, 1st, 0%) -> `{int}`; P5 datatype (a boolean/integer/string field) -> `a(n) {word} field`; P6 thing-noun (object/entry, box/object, Cli/Sdk) -> `{word}`; P7 enum/style/tier/ordinal/language-as-file -> value/`{word}`; P8 property-name baked in the phrase -> `{string}`; P9 count/quantifier (exactly/at least/at most/only/all N) -> comparator `{word}` + `{int}`; P10 value present/absent -> `(contains|does not contain) {string}` (substring on the serialized body); P11 configure/stub a service to return status/network/delay -> endpoint + `{word}` kind; P12 no-client-error family (runtime/JS/console/crash) -> one DOM-absence step + one collected-errors step; P13 attribute-accretion fixtures -> one `Given('... exists with:', DataTable)`; P14 optional trailing clause -> a REGEX LITERAL `(?:...)?` for the optional part (a parameter type INSIDE a Cucumber-expression `(...)` optional is ILLEGAL syntax - "An optional may not contain a parameter type" - a bare `(...)` is only valid when the optional clause has no parameter inside it at all; e.g. register `/^the editor displays "([^"]*)"(?: for file "([^"]*)")?$/` as a regex, never `'the editor displays {string}( for file {string})'` as a quoted string); P15 verb synonyms (renders/is loaded/is visible) -> one canonical verb; P16 a/an grammar split -> `an?`.
 
 **Rule 8d - SHARED STEP LIBRARY (bdd + e2e = ONE vocabulary):** emit exactly ONE step-def per canonical step into a style-agnostic `step-defs/<subdir>/` path (no `bdd/`|`e2e/` segment); both bdd and e2e feature files bind to it by step text. NEVER emit a per-style twin - the target runner loads a single step world, so the same pattern under both `bdd/` and `e2e/` is an ambiguous/duplicate step-definition error. Compose the BDD scenarios first, then compose E2E REUSING the BDD step phrasings: an E2E scenario is a BROADER multi-page / multi-API user journey assembled from the shared steps, not a re-worded per-API twin. Introduce a new step only when no shared step expresses the action.
+
+**Rule 8e - {word}/{string} AMBIGUITY GUARD:** a `{word}` parameter's built-in match (`\S+`) ALSO matches an already-quoted value like `"true"` (quotes are not whitespace), so a `{word}`-typed step (P5/P9/P11 above) can silently collide with a DIFFERENT `{string}`-typed step covering the same phrase, for any scenario that happens to assert a quoted value - aborting the whole compile with "Multiple definitions matched scenario step" (there is no execution-time backstop in this standalone flow to repair it after the fact, so getting this right at generation time matters). Before emitting a `{word}`-typed step, check whether a `{string}`-typed sibling already covers the same phrase shape; if a quoted-value collision is possible, register a regex literal with a quote-excluding word capture instead of the bare Cucumber-expression `{word}` type: `/^... equals ((?!["'])\S+)$/`, never `'... equals {word}'`.
+
+**Rule 8f - SELF-CHECK BEFORE FINALIZING:** there is no execution-time repair pass in this standalone flow -
+whatever you write is what runs. Before presenting a generated step-def as done, mentally re-parse it: does it
+parse as valid code with no stray prose (a hallucinated explanation, or an acknowledgment that the step
+already exists, written as file content instead of simply not generating it)? Is every quoted-string step
+pattern a LEGAL Cucumber Expression (no parameter type inside an optional `(...)` group - P14 in Rule 8c above;
+no `{word}` that could collide with a `{string}` sibling - Rule 8e above)? If something is off, regenerate that
+one step rather than emitting it - a single broken file aborts the whole compile for every feature in the run,
+not just the one step.
 
 **Rule 9 - CATEGORY TAG REQUIRED:**
 Every generated step-def file must carry a two-tag category comment at the top:
