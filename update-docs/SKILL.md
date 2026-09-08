@@ -69,10 +69,10 @@ Read `.docs-verified-sha` at the repo root.
 
 ### Step 1 - Verify docs/ exists
 Check that `docs/` exists at the repo root.
-- **Present:** proceed with Steps 2-6 (root-doc processing), then Steps 7-8.
+- **Present:** proceed with Steps 2-6 (root-doc processing), then Step 7.
 - **Absent BUT `.gitmodules` exists** (umbrella repo whose docs live in submodules, e.g.
-  gherkin-sandbox): skip the root-doc steps and jump straight to Step 7 (submodule phase) and
-  Step 8 (standalone skill sync). Do NOT abort.
+  gherkin-sandbox): skip the root-doc steps and jump straight to Step 7 (submodule phase).
+  Do NOT abort.
 - **Absent AND no `.gitmodules`:** abort - "No docs/ directory found at repo root."
 
 ### Step 2 - Get current HEAD SHA
@@ -134,12 +134,6 @@ List every doc touched with: doc name, action taken (updated N rows / skipped).
 ### Step 7 - Process submodules
 If `.gitmodules` exists at the repo root, run the **Submodule Phase** (see
 `## Submodule discovery` below) after the root repo docs are processed.
-
-### Step 8 - Standalone skill sync (umbrella only)
-After submodules are processed, if `services/agent/docs/AGENT_RULES.md` is in the merged
-changed-files set, run the **Standalone skill sync** (see `## Standalone skill sync` below) to
-propagate the rule change into the `automation-agent-standalone` skill. Umbrella-level only; skip
-inside a single-submodule run.
 
 ---
 
@@ -311,56 +305,6 @@ For each qualifying submodule (non-feature branch):
    submodule's current HEAD SHA.
 
 7. Report: `[submodule: <path>] <result summary>` for each submodule processed.
-
----
-
-## Standalone skill sync
-
-Runs at the **umbrella level only**, after the submodule phase (Mode 1 Step 8 / the Mode 1F
-equivalent), gated on `services/agent/docs/AGENT_RULES.md` appearing in the merged changed-files
-set. Propagates a rule-contract change into the `automation-agent-standalone` skill - a
-hand-maintained paraphrase of the same pipeline living in the `skills/` submodule. This automates
-what the umbrella `CLAUDE.md` used to require by hand.
-
-Targets (all under `skills/automation-agent-standalone/`): `SKILL.md`,
-`copilot-instructions-template.md`, `README.md`.
-
-Procedure:
-1. Diff the rules: `git -C services/agent diff {base-sha} HEAD -- docs/AGENT_RULES.md` (plus the
-   uncommitted lists) to find which contract(s) changed.
-2. For each changed contract, use the mapping table below to locate the corresponding section(s)
-   in the target files and rewrite ONLY those, re-condensing to each file's existing style
-   (targeted `Edit`, never a full rewrite).
-3. Constraints (do NOT violate):
-   - Map by **content, not rule number**. `SKILL.md` is mode-organized and its "Rule 14"/"Rule 15"
-     are homonyms meaning something else; `copilot-instructions-template.md` uses AGENT_RULES
-     numbering and is the closest mirror.
-   - `SKILL.md` is a deliberate **subset** (omits Rules 3/5/6/12/14/14A/15/Stage 2). Do NOT add
-     those to it.
-   - `README.md` is usage-only and already advertises `unit`/`visual` modes `SKILL.md` lacks. Do
-     NOT auto-reconcile that pre-existing drift; touch README only for the mode/flag/output-dir
-     rows the mapping table calls out.
-   - Preserve each file's frontmatter and unrelated sections.
-
-Rule -> skill-section mapping:
-
-| AGENT_RULES.md contract | SKILL.md target | copilot-instructions-template.md | README.md |
-|---|---|---|---|
-| Stage 0 baseline | `## Mode: analyze` Procedure | `### Stage 0` (shorter - re-condense) | orphan-resolution output line only |
-| Rule 1 target folder | plan Step 4 | `### Rule 1` | - |
-| Rule 1B ACs / journey | `## Mode: story` + plan Steps 1-3 (journey prompt verbatim) | `### Rule 1B` | - |
-| Rule 4 feature generation | bdd `### BDD Composition Rules` (renumbered) | `### Rule 4` (4.1-4.16) | - |
-| Rule 4B negative scenarios | bdd `### Inferred-Negative Scenarios` | `### Rule 4B` | - |
-| Step consolidation / P1-P16 / parameterization | steps Rule 7/8/8b/8c/8d/10 + anti-patterns; bdd Rule 16 catalogue | `### Rule 11.P2.PARAM` §3b/3c/3d/§7 + anti-patterns; Rule 4.16 table | - |
-| Rule 9 reuse classification | `## NLP Step Matching` | (n/a) | - |
-| Rule 10 coverage defs | coverage Step 4 table | `### Rule 10` | output-dir list |
-| Rule 13 credentials | Operating Rule 8 | §8 + `### Rule 13` | - |
-| Rule 14B mock/seam fidelity | steps `### Seam & mock fidelity` | `### Rule 14B` | - |
-| Rule 14C interface retargeting | no SKILL.md target (execution-time; no runner) | `### Rule 14C` | - |
-| New stage / mode | new `## Mode:` + Mode Dispatch row | new rule section | mode table + flags |
-| Rules 3 / 5 / 6 / 12 / 14 / 14A / 15 / Stage 2 | no SKILL.md target - do not add | 14/14A/15/Stage 2 also omitted | `unit`/`visual` modes pre-exist |
-
-Report `[standalone-sync] <file>: <sections edited>` per file, or `[standalone-sync] no rule change`.
 
 ---
 
