@@ -1,0 +1,9 @@
+# Shell scripts MUST check out with LF, on every platform.
+#
+# This repo is developed on Windows, where git's autocrlf converts text files to CRLF on
+# checkout. A shell script with CRLF line endings fails on macOS and Linux with an obscure
+# "\r: command not found", or "bad interpreter: /usr/bin/env bash^M" - and the cross-platform
+# half of this skill is precisely the half that cannot be tested here.
+*.sh text eol=lf
+
+# PowerShell and Node are both content with either ending, so they are left to the repo default.
