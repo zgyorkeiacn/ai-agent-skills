@@ -95,7 +95,7 @@ project: <basename of project root directory>
 
 ## What was implemented
 
-<2-4 sentences covering the main deliverable and its purpose>
+<1-2 sentences: the main deliverable and its purpose>
 
 ## Key decisions
 
@@ -113,7 +113,7 @@ project: <basename of project root directory>
 ```
 
 Rules:
-- Keep each section tight. The goal is a summary a future Claude instance can read in under
+- Keep each section tight: bullets, not prose; about 15 lines or 1.5 KB in all; no history that `git log` holds; the user's words only where they set a decision or a rule, once. The goal is a summary a future Claude instance can read in under
   30 seconds to re-establish context.
 - Never copy-paste code blocks from the conversation into the summary.
 - If a section has nothing to report, write "None." rather than omitting the heading.
@@ -261,5 +261,6 @@ archive/ files are kept indefinitely (permanent record).
 - **Synthesise, do not copy**: summaries must be written fresh from memory, not copied from
   conversation turns.
 - **Idempotent CLAUDE.md patch**: never add the session-wrap block more than once.
+- **Short summary**: the writing rule of /session-handoff applies (bullets, about 1.5 KB, no copied prompts or reports).
 - **Terse output**: only the structured report lines; no narration.
 - **Always write all four sections** of `current.md`, even if a section is "None."

@@ -24,6 +24,18 @@ Two documents, always kept in sync:
 
 ---
 
+## Writing rule: short (MEFF.PLAN-TERSE)
+
+Both documents are read on every resume, so what is written is paid for again each time.
+
+- Bullets and tables, not prose. Per entry: key, decision, files, commits, what is still open. Cap about 15 lines or 1.5 KB per entry.
+- Never copy an item's prompt, a report, per-step test counts or what `git log` already holds.
+- Quote the user only where the words set a decision or a rule: once, in the shortest form that carries it.
+- Change an entry in place, never append a log under it; a finished piece is one line (key, commit).
+- No em or en dashes.
+
+---
+
 ## Step 1 - Create AGENT_CONTEXT.md
 
 Place in the project root. Any agent with repo access will find it immediately.
@@ -31,7 +43,7 @@ Place in the project root. Any agent with repo access will find it immediately.
 ### Required Sections (in order)
 
 #### 1. What This Project Is
-One paragraph. What it does, what it produces, who uses it.
+Two or three lines. What it does, what it produces, who uses it.
 
 #### 2. Running the Project
 Table of commands: dev server, build, test, deploy. Include prerequisites (Node version, etc.).
@@ -58,7 +70,7 @@ Table of all CSS custom properties: token name, value, usage context. State the 
 Table of static assets: filename, intended usage. Mark which are read-only.
 
 #### 10. Coding Conventions
-Bullet list of project-specific rules: naming, patterns, what to avoid. Keep it under 15 bullets.
+Bullet list of project-specific rules: naming, patterns, what to avoid. Under 15 bullets, one line each.
 
 #### 11. Guardrails
 Explicit list of things agents must NOT do. Numbered. Non-negotiable.
@@ -181,7 +193,8 @@ These rules apply for the lifetime of the project:
 3. **Any new convention** established during development is added to the Coding Conventions section of `AGENT_CONTEXT.md`.
 4. **The Current State block** is the first thing updated when starting work and the last thing updated when stopping.
 5. **Guardrails are never removed** from `AGENT_CONTEXT.md` - only added to.
-6. **Phase exit criteria** must be verified (command run, curl checked, etc.) before marking a phase `[x]`.
+6. **Short entries:** every write follows the writing rule above.
+7. **Phase exit criteria** must be verified (command run, curl checked, etc.) before marking a phase `[x]`.
 
 ---
 
@@ -194,6 +207,7 @@ These rules apply for the lifetime of the project:
 | No entry/exit criteria | Agent cannot self-verify phase completion | Add explicit, runnable checks |
 | Current State block not updated | Next agent reads stale status, duplicates work | Update it first, every session |
 | Phases sized by feature, not by token budget | Context overflow mid-phase | Size by line count, split if > 2000 lines |
+| Entries that copy prompts, reports or history, or grow as a log | Every resume re-reads them; the plan reaches hundreds of KB | Writing rule: bullets, about 1.5 KB per entry, edit in place |
 
 ---
 

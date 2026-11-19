@@ -17,6 +17,18 @@ If a `CODEBASE_INDEX.md` or `docs/` directory exists in the working directory, l
 
 ---
 
+## Writing rule: short (MEFF.PLAN-TERSE)
+
+Every write to either document, and every plan-mode plan, follows this. A plan is read on every resume, so each word costs again.
+
+- Bullets, not prose. Per entry: key, decision, files, commits, what is still open. Cap about 15 lines or 1.5 KB per entry.
+- Never copy an item's prompt, a report, per-step test counts or what `git log` already holds.
+- Quote the user only where the words set a decision or a rule: once, in the shortest form that carries it.
+- Change an entry in place, never append a log under it; a finished piece is one line (key, commit).
+- No em or en dashes.
+
+---
+
 ## When invoked via ExitPlanMode
 
 Read the most recently written plan file at `~/.claude/plans/`. Analyse its phases and tasks:
@@ -37,7 +49,7 @@ Read the most recently written plan file at `~/.claude/plans/`. Analyse its phas
    - File list (relative paths)
    - Estimated tokens (e.g., `~3,500 tok`)
    - Verification step (one concrete command or observable outcome)
-4. **Write to `implementation_plan.md`** using the standard phase/task format.
+4. **Write to `implementation_plan.md`** using the standard phase/task format, within the writing rule above.
    Add `| Est. tokens | ~N,000 |` as a metadata row under each increment heading.
 
 ---
@@ -92,7 +104,7 @@ Read `AGENT_CONTEXT.md` and `implementation_plan.md` at the working directory ro
 ### 3. Refresh `implementation_plan.md`
 - Update the Current State block FIRST.
 - Tick any completed tasks `[ ] -> [x] (timestamp)`.
-- Add or update the "Shipped this session" list when a phase is complete.
+- Add or update the "Shipped this session" list when a phase is complete: one line per piece, within the writing rule.
 - Update the Outstanding / known limitations section.
 
 ### 4. Refresh `AGENT_CONTEXT.md` only when orientation changed
@@ -107,6 +119,7 @@ Report new line counts of both files and the Current State timestamp.
 ## Rules
 
 - **Never use em-dash (`-`)** - use a regular hyphen (`-`).
+- **Short entries:** the writing rule at the top applies to every write.
 - **Diffs over rewrites:** prefer targeted `Edit`s over a full `Write` when files already exist.
 - **Never** include secrets, PATs, tokens, or `.env` contents - both files are committed.
 - **Guardrails are append-only** in `AGENT_CONTEXT.md`.

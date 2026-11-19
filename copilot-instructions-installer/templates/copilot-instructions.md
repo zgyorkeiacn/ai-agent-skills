@@ -27,6 +27,7 @@ To stop background scratchpad execution and ghost token burning, format all code
 
 ## 3. Session Resume & Codebase Orientation
 Session Resume: Before your first response, read AGENT_CONTEXT.md and the Current State block in implementation_plan.md at the repo root. This makes work resumable without re-reading the whole codebase.
+Plan Writing: write plans, handoff documents and worklist entries short: bullets, not prose; per entry the key, the decision, the files, the commits and what is still open (about 15 lines or 1.5 KB); never copy a prompt, a report or history that git log holds; quote the user only where the words set a rule, once; edit an entry in place, never append a log; no em or en dashes.
 
 Code Orientation: When modifying repo source files, read docs/AGENT_MODULE_INDEX.md first to map file-to-module exports instead of grepping blindly.
 

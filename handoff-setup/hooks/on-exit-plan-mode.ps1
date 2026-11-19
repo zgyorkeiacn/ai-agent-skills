@@ -18,7 +18,7 @@ $planFile = Get-ChildItem -Path $plansDir -Filter "*.md" -ErrorAction SilentlyCo
 if (-not $planFile) { exit 0 }
 
 $logFile = Join-Path $env:TEMP "claude-handoff-exit.log"
-$prompt = "The plan at '$planFile' was just accepted. Run /session-handoff skill: incorporate the plan's phases and tasks into implementation_plan.md. Preserve AGENT_CONTEXT.md unless it needs an update."
+$prompt = "The plan at '$planFile' was just accepted. Run /session-handoff skill: incorporate the plan's phases and tasks into implementation_plan.md. Write it short (bullets, about 1.5 KB per entry, no copied prompts or history). Preserve AGENT_CONTEXT.md unless it needs an update."
 
 Start-Process -FilePath "pwsh" `
     -ArgumentList @(
