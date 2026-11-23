@@ -32,11 +32,13 @@ scheduled task is a persistent change to your machine:
 
 ```
 # Windows
-powershell -ExecutionPolicy Bypass -File scripts/install-schedule.ps1 -Time 09:00
+powershell -NoProfile -File scripts/install-schedule.ps1 -Time 09:00
 
 # macOS / Linux
 bash scripts/install-schedule.sh --time 09:00
 ```
+
+Under RemoteSigned a local script runs as is. A downloaded copy marked as from the internet needs `Unblock-File` on that file first. Never use Bypass.
 
 ## Daily use
 

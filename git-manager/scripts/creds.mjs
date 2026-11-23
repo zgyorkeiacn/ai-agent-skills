@@ -915,7 +915,8 @@ async function cmdInstallSchedule(args) {
   if (process.platform === 'win32') {
     const ps = join(scriptDir, 'install-schedule.ps1');
     console.log(`run this (it registers a Task Scheduler job at ${at}):\n`);
-    console.log(`  powershell -ExecutionPolicy Bypass -File "${ps}" -Time ${at}`);
+    console.log(`  powershell -NoProfile -File "${ps}" -Time ${at}`);
+    console.log(`\nUnder RemoteSigned a local script runs as is. If this copy was downloaded (marked as from the internet), run Unblock-File on it first. Never use Bypass.`);
   } else {
     const sh = join(scriptDir, 'install-schedule.sh');
     console.log(`run this (it installs a cron entry at ${at}):\n`);
