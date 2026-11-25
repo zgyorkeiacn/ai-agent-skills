@@ -655,8 +655,7 @@ const And = Given, But = Given;
 
 When('I navigate to {string}', async ({ page }: ScenarioState, url: string) => {
   await page.goto(url);
-  await page.waitForLoadState('networkidle');
-  await expect(page).toHaveURL(new RegExp(url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  // waitForLoadState('networkidle') is PROHIBITED here: it blocks route-intercepted delays, breaking loading-state assertions.
 });
 Then('the {string} is {word}', async ({ page }: ScenarioState, name: string, state: string) => {
   // accessibility-first (works without data-testids); {name} must be a real element, not a page NAME.

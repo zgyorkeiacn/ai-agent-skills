@@ -1,0 +1,26 @@
+# Team knowledge about recurring failures.
+#
+# Starts empty and grows. An entry here ALWAYS overrides the built-in heuristics, because it is a
+# finding and they are only priors.
+#
+# Add entries when you have actually established a cause - not when you suspect one. The file is
+# worth more than the heuristics precisely because of that distinction.
+#
+# See references/mechanisms/knowledge-file.md for the full schema.
+#
+# Key on the NORMALISED signature exactly as a report prints it, including any <n>, <uuid> or
+# <timestamp> placeholders.
+
+signatures: {}
+
+# Example - delete this comment block and uncomment to start:
+#
+# signatures:
+#   "HTTP_503 api/auth/getToken":
+#     owner: ENVIRONMENT
+#     title: Auth service unavailable out of hours
+#     what: >
+#       The identity service is taken down nightly between 20:00 and 21:00, so any run in that
+#       window fails at the first call and every test fails behind it.
+#     fix: Exclude the maintenance hour via analysis.excludeHours rather than retrying.
+#     probe: tools/auth-probe.spec.ts

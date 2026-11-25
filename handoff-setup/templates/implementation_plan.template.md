@@ -84,6 +84,8 @@ NOTES          : Awaiting Phase 1 start.
 
 ## Agent Update Protocol
 
+Write short: bullets, about 15 lines or 1.5 KB per entry (key, decision, files, commits, what is open); no copied prompts, reports or git history; edit in place, no appended logs.
+
 When you complete a task:
 ```
 1. Tick the checkbox: [ ] -> [x]

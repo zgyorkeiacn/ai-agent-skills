@@ -11,8 +11,8 @@
   whether-logged-on-or-not would find nothing and report every token as missing.
 
 .EXAMPLE
-  powershell -ExecutionPolicy Bypass -File install-schedule.ps1 -Time 09:00
-  powershell -ExecutionPolicy Bypass -File install-schedule.ps1 -Uninstall
+  powershell -NoProfile -File install-schedule.ps1 -Time 09:00
+  powershell -NoProfile -File install-schedule.ps1 -Uninstall
 #>
 [CmdletBinding()]
 param(

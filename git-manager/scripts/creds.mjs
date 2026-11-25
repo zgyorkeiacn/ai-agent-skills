@@ -22,7 +22,7 @@
  */
 
 import { spawn } from 'node:child_process';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -32,6 +32,18 @@ import { stdin as input, stdout as output } from 'node:process';
 const HOME_DIR = process.env.GIT_MANAGER_HOME || join(homedir(), '.claude', 'credentials');
 const ACCOUNTS_PATH = join(HOME_DIR, 'accounts.json');
 const STATUS_PATH = join(HOME_DIR, 'pat-status.json');
+
+/**
+ * Per-account commit identity, included into the global gitconfig by remote URL.
+ *
+ * Kept in its own file per account rather than inlined into ~/.gitconfig because `includeIf`
+ * takes a PATH, not a block, and because one file per account makes `remove-account` a delete
+ * rather than a surgical edit of the user's own gitconfig.
+ */
+const identityPath = (id) => join(HOME_DIR, `identity-${id}.gitconfig`);
+
+/** `includeIf "hasconfig:remote.*.url:"` landed in Git 2.36. Older git ignores it SILENTLY. */
+const MIN_GIT_FOR_IDENTITY = [2, 36];
 
 /**
  * Synthetic host for API tokens that must NOT share a key with an account's git token.
@@ -228,22 +240,43 @@ function parseRemote(url) {
 const isAdoHost = (host) => host.includes('dev.azure.com') || host.includes('visualstudio.com');
 
 /** Walk roots one level deep looking for git work trees. */
+/**
+ * Find work trees under each root, plus the roots themselves.
+ *
+ * `git -C <dir> remote get-url origin` succeeds from ANY directory inside a work tree, not only
+ * its root, so a directory that answers is not evidence that it IS a repo. Passing a repo as a
+ * root therefore registered one entry per subdirectory: measured, two repos reported as 30, and
+ * the surviving localPath was whichever child happened to sort last (`.../agent/webui`).
+ * `rev-parse --show-toplevel` is the actual question, and it also collapses those duplicates.
+ *
+ * The root itself is checked too, so pointing at a repo directly does the obvious thing rather
+ * than silently scanning past it.
+ */
 async function discoverRepos(roots) {
-  const found = [];
+  const byPath = new Map();
+  const consider = async (dir) => {
+    const top = await runGit(['-C', dir, 'rev-parse', '--show-toplevel']);
+    if (top.code !== 0 || !top.out) return;
+    const localPath = resolve(top.out);
+    if (byPath.has(localPath)) return;
+    const r = await runGit(['-C', localPath, 'remote', 'get-url', 'origin']);
+    if (r.code !== 0 || !r.out) return;
+    const parsed = parseRemote(r.out);
+    if (parsed) byPath.set(localPath, { ...parsed, localPath, url: r.out });
+  };
+
   for (const root of roots) {
     if (!existsSync(root)) continue;
+    await consider(root);
     let entries = [];
     try { entries = readdirSync(root); } catch { continue; }
     for (const entry of entries) {
       const dir = join(root, entry);
       try { if (!statSync(dir).isDirectory()) continue; } catch { continue; }
-      const r = await runGit(['-C', dir, 'remote', 'get-url', 'origin']);
-      if (r.code !== 0 || !r.out) continue;
-      const parsed = parseRemote(r.out);
-      if (parsed) found.push({ ...parsed, localPath: dir, url: r.out });
+      await consider(dir);
     }
   }
-  return found;
+  return [...byPath.values()];
 }
 
 /**
@@ -498,10 +531,15 @@ async function cmdOnboard(args) {
       let account = store.accounts.find((a) => a.id === idAnswer);
       if (!account) {
         const username = await ask('  username that authenticates it', ado ? '' : g.owner);
+        // Asked here rather than left for later because a missing email has no symptom until a
+        // commit is already authored under the wrong one, and rewriting authorship after the
+        // fact changes every SHA from that commit onward.
+        const email = await ask('  commit email for this account (blank to decide later)', '');
         account = {
           id: idAnswer,
           host: g.host,
           username,
+          email,
           description: '',
           // ADO git auth is owned by the credential helper's Azure AD flow; there is no PAT for
           // git to find. Its PAT is a REST API credential only.
@@ -531,6 +569,11 @@ async function cmdOnboard(args) {
     // identity a repo wants, which is the whole collision this skill exists to prevent.
     const routed = await applyRouting(store, { apply: true });
     console.log(`configured ${routed} owner route(s) in global gitconfig`);
+    const ident = await applyIdentities(store, { apply: true });
+    if (ident.unsupported) console.log(`commit identity SKIPPED: git ${MIN_GIT_FOR_IDENTITY.join('.')}+ is required for includeIf hasconfig`);
+    else console.log(`configured commit identity for ${ident.accounts} account(s) (${ident.rules} include rule(s))`);
+    const noEmail = store.accounts.filter((a) => !a.email).map((a) => a.id);
+    if (noEmail.length) console.log(`no commit email yet for: ${noEmail.join(', ')}  (set with: creds set-identity --id <id> --email <e>)`);
 
     console.log('\nNow supply a token for each account. Blank skips.');
     for (const account of store.accounts) {
@@ -607,6 +650,108 @@ async function applyRouting(store, { apply }) {
   return n;
 }
 
+// ---------------------------------------------------------------- commit identity
+
+async function gitVersionParts() {
+  const r = await runGit(['--version']);
+  const m = r.out.match(/(\d+)\.(\d+)/);
+  return m ? [Number(m[1]), Number(m[2])] : null;
+}
+
+async function gitSupportsIdentityRouting() {
+  const v = await gitVersionParts();
+  if (!v) return false;
+  const [maj, min] = v, [reqMaj, reqMin] = MIN_GIT_FOR_IDENTITY;
+  return maj > reqMaj || (maj === reqMaj && min >= reqMin);
+}
+
+/**
+ * Glob patterns matching every remote URL that belongs to this account.
+ *
+ * Keyed on the REMOTE URL rather than on the directory (`includeIf "gitdir:"`), deliberately.
+ * A gitdir rule binds identity to where a clone happens to sit, so it goes wrong exactly when
+ * the registry is already wrong: a repo moved, a fresh clone outside the scanned roots, or a
+ * remote repointed at a different account. Matching the remote binds identity to the same axis
+ * the credential route uses, so the two cannot disagree about who owns a repo.
+ *
+ * Several patterns per owner because git's match is LITERAL and CASE-SENSITIVE (measured, not
+ * assumed): `https://github.com/Owner/**` does not match a `git@` remote, and a lowercase
+ * pattern does not match a mixed-case URL. The `*@` forms cover a URL carrying a username,
+ * which Azure DevOps hands out by default.
+ */
+function identityPatterns(account) {
+  const out = new Set();
+  for (const owner of account.owners ?? []) {
+    for (const o of new Set([owner, owner.toLowerCase()])) {
+      out.add(`https://${account.host}/${o}/**`);
+      out.add(`https://*@${account.host}/${o}/**`);
+      out.add(`ssh://git@${account.host}/${o}/**`);
+      out.add(`git@${account.host}:${o}/**`);
+    }
+  }
+  return [...out];
+}
+
+const identityKey = (pattern) => `includeIf.hasconfig:remote.*.url:${pattern}.path`;
+
+/** The commit name to sign with. Falls back to the login, which is what a GitHub web commit uses. */
+const commitNameFor = (a) => a.commitName || a.username || a.id;
+
+function writeIdentityFile(account) {
+  const path = identityPath(account.id);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path,
+    `# Generated by git-manager for account "${account.id}". Edits are overwritten by \`repair\`.\n` +
+    `# Applied to any repo whose remote matches an owner of this account.\n` +
+    `[user]\n\tname = ${commitNameFor(account)}\n\temail = ${account.email}\n`, 'utf8');
+  return path;
+}
+
+/**
+ * Write each account's commit identity and the includeIf rules that select it.
+ *
+ * NOT gated on `contestedHosts` the way credential routing is. That gate is sound for
+ * credentials - with one account on a host git has nothing to disambiguate - but it does not
+ * transfer to identity: git cannot guess a commit email from the number of accounts, so a sole
+ * account on a host needs its identity written just as much as a contested one. Nor is it gated
+ * on authMode: an `interactive-aad` account authenticates through Azure AD but still authors
+ * commits.
+ */
+async function applyIdentities(store, { apply }) {
+  const withEmail = store.accounts.filter((a) => a.email);
+  if (!withEmail.length) return { accounts: 0, rules: 0, unsupported: false };
+  if (!(await gitSupportsIdentityRouting())) {
+    return { accounts: 0, rules: 0, unsupported: true };
+  }
+
+  let rules = 0;
+  for (const a of withEmail) {
+    const file = apply ? writeIdentityFile(a) : identityPath(a.id);
+    for (const pattern of identityPatterns(a)) {
+      if (apply) await runGit(['config', '--global', identityKey(pattern), file]);
+      rules++;
+    }
+  }
+  return { accounts: withEmail.length, rules, unsupported: false };
+}
+
+async function removeIdentity(account) {
+  for (const pattern of identityPatterns(account)) {
+    await runGit(['config', '--global', '--unset-all', identityKey(pattern)]);
+  }
+  const path = identityPath(account.id);
+  if (existsSync(path)) rmSync(path);
+}
+
+/** What git ACTUALLY resolves in a repo, which is the only proof the include rules bind. */
+async function resolvedIdentity(cwd) {
+  const [name, email] = await Promise.all([
+    runGit(['-C', cwd, 'config', '--get', 'user.name']),
+    runGit(['-C', cwd, 'config', '--get', 'user.email']),
+  ]);
+  return { name: name.code === 0 ? name.out : null, email: email.code === 0 ? email.out : null };
+}
+
 // ---------------------------------------------------------------- commands
 
 async function cmdList(args) {
@@ -617,6 +762,7 @@ async function cmdList(args) {
     console.log(`\n${a.id}`);
     console.log(`  host       ${a.host}`);
     console.log(`  username   ${a.username || '(n/a)'}`);
+    console.log(`  commits as ${a.email ? `${commitNameFor(a)} <${a.email}>` : 'NOT SET - falls back to global user.email'}`);
     console.log(`  auth       ${a.authMode}`);
     if (a.description) console.log(`  note       ${a.description}`);
     console.log(`  owners     ${(a.owners ?? []).join(', ') || '(none)'}`);
@@ -659,6 +805,44 @@ async function cmdDoctor() {
     console.log(`    token  ${token ? 'present' : 'MISSING'}   repos ${repos.length}`);
     console.log(`    route  ${routes.map((r) => `${r.owner}->${r.routed ?? (contested ? 'UNROUTED' : 'n/a, sole account on host')}`).join(', ') || 'no owners'}`);
     if (!token) problems.push(`account "${a.id}" has no stored token - run: creds set-token --id ${a.id}`);
+  }
+
+  // Commit identity. Checked for EVERY account, including interactive-aad ones: how a repo
+  // authenticates and who it commits as are independent, and an ADO repo still needs an author.
+  const identitySupported = await gitSupportsIdentityRouting();
+  console.log('\n  commit identity');
+  if (!identitySupported) {
+    problems.push(`git is older than ${MIN_GIT_FOR_IDENTITY.join('.')}, so includeIf hasconfig routing is IGNORED - commit email stays a manual per-repo step`);
+    console.log(`    unsupported by this git (needs ${MIN_GIT_FOR_IDENTITY.join('.')}+)`);
+  }
+  for (const a of store.accounts) {
+    if (!a.email) {
+      problems.push(`account "${a.id}" has no commit email - its repos author under whatever global user.email says. Run: creds set-identity --id ${a.id} --email <e>`);
+      console.log(`    ${a.id}  NOT SET`);
+      continue;
+    }
+    const file = identityPath(a.id);
+    if (!existsSync(file)) problems.push(`account "${a.id}" declares ${a.email} but ${file} is missing - run: creds repair`);
+
+    // A declared identity that no rule selects is invisible, and looks identical to a correct
+    // one until a commit lands under the wrong address. Verify against what git RESOLVES.
+    const bound = [];
+    for (const pattern of identityPatterns(a)) {
+      const r = await runGit(['config', '--global', '--get', identityKey(pattern)]);
+      if (r.code === 0 && r.out) bound.push(pattern);
+    }
+    if (identitySupported && !bound.length) problems.push(`account "${a.id}" has a commit email but no includeIf rule binds it - run: creds repair`);
+
+    const checked = await Promise.all((a.repositories ?? [])
+      .filter((r) => r.localPath && existsSync(r.localPath))
+      .map(async (r) => ({ repo: `${r.owner}/${r.name}`, path: r.localPath, ...(await resolvedIdentity(r.localPath)) })));
+    const drifted = checked.filter((c) => c.email && c.email.toLowerCase() !== a.email.toLowerCase());
+    console.log(`    ${a.id}  ${commitNameFor(a)} <${a.email}>   ${bound.length} rule(s), ${checked.length} local repo(s) checked`);
+    for (const d of drifted) {
+      // Local config outranks any global include. That is correct precedence, but it silently
+      // defeats the account identity, so name it rather than leaving it to be discovered.
+      problems.push(`repo "${d.repo}" resolves user.email=${d.email}, not the account's ${a.email} - a repo-local override wins over the include. Clear it with: git -C "${d.path}" config --unset user.email`);
+    }
   }
 
   // A secret here would defeat the entire metadata/secret split.
@@ -713,16 +897,49 @@ async function cmdAddAccount(args) {
   const ado = isAdoHost(host);
   const account = {
     id, host, username: username || '',
+    email: args.email || '',
     description: args.description || '',
     authMode: ado ? 'interactive-aad' : 'credential-store',
     owners: args.owners ? args.owners.split(',').map((s) => s.trim()) : [],
     repositories: [],
   };
+  if (args.name) account.commitName = args.name;
   if (ado) account.apiToken = { envVar: 'AZURE_DEVOPS_PAT' };
   store.accounts.push(account);
   saveAccounts(store);
   await applyRouting(store, { apply: true });
+  await applyIdentities(store, { apply: true });
   console.log(`added "${id}" and refreshed routing`);
+  if (!account.email) console.log(`no commit email set - run: creds set-identity --id ${id} --email <e>`);
+}
+
+/**
+ * Set the commit identity for an account that already exists, then bind it immediately.
+ *
+ * Applying on write rather than deferring to `repair` is the point of the feature: the gap this
+ * closes is a per-repo manual `git config user.email` after every remote repoint.
+ */
+async function cmdSetIdentity(args) {
+  const store = loadAccounts();
+  const account = findAccount(store, args.id);
+  if (!args.email && !args.name) throw new Error('set-identity requires --email and/or --name');
+  if (args.email) {
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(args.email)) throw new Error(`"${args.email}" is not an email address`);
+    account.email = args.email;
+  }
+  if (args.name) account.commitName = args.name;
+  saveAccounts(store);
+
+  const ident = await applyIdentities(store, { apply: true });
+  if (ident.unsupported) {
+    console.log(`stored, but NOT applied: git ${MIN_GIT_FOR_IDENTITY.join('.')}+ is required for includeIf hasconfig routing.`);
+    console.log('until git is upgraded this still needs a per-repo `git config user.email`.');
+    process.exitCode = 1;
+    return;
+  }
+  console.log(`${account.id}: ${commitNameFor(account)} <${account.email || '(no email)'}>`);
+  console.log(`applied to every repo whose remote matches: ${(account.owners ?? []).join(', ') || '(no owners)'}`);
+  console.log('a repo-local user.email still wins, by design - unset it to let this take effect there.');
 }
 
 async function cmdRemoveAccount(args) {
@@ -734,9 +951,122 @@ async function cmdRemoveAccount(args) {
   for (const owner of account.owners ?? []) {
     await runGit(['config', '--global', '--unset', `credential.https://${account.host}/${owner}.username`]);
   }
+  await removeIdentity(account);
   store.accounts = store.accounts.filter((a) => a.id !== account.id);
   saveAccounts(store);
-  console.log(`removed "${account.id}", its tokens and its routes`);
+  console.log(`removed "${account.id}", its tokens, its routes and its commit identity`);
+}
+
+/**
+ * Does this repository still exist on the provider?
+ *
+ * Three outcomes, never two. "Deleted" and "I could not tell" must stay distinguishable: a
+ * network blip or an under-scoped token would otherwise read as a mass deletion and prune a
+ * registry that was correct. Only `gone` is ever acted on.
+ */
+/**
+ * What the token is allowed to SEE, which decides whether a 404 means anything.
+ *
+ * GitHub answers 404, not 403, for a private repo a token cannot read, so that it does not leak
+ * existence. A prune that takes 404 at face value therefore deletes every private repo the
+ * moment a token is under-scoped, and the output looks exactly like a real mass deletion.
+ * Measured: a run against a 6-repo account reported 5 gone, and only the implausible COUNT gave
+ * it away.
+ *
+ * `x-oauth-scopes` is present (possibly empty) for a classic PAT and absent for a fine-grained
+ * one, so its absence means "cannot tell", not "no scopes".
+ */
+async function githubTokenVisibility(token) {
+  if (!token) return { canSeePrivate: false, reason: 'no token available to query the API' };
+  let res;
+  try {
+    res = await fetch('https://api.github.com/user', {
+      headers: { Authorization: `Bearer ${token}`, 'User-Agent': 'git-manager', Accept: 'application/vnd.github+json' },
+    });
+  } catch (err) {
+    return { canSeePrivate: false, reason: `could not reach the API: ${err.message}` };
+  }
+  if (!res.ok) return { canSeePrivate: false, reason: `HTTP ${res.status} from /user` };
+  const header = res.headers.get('x-oauth-scopes');
+  if (header === null) {
+    // Fine-grained PAT. Its repository grant cannot be enumerated from a header, so a 404 is
+    // genuinely ambiguous and the caller is told so rather than being handed false confidence.
+    return { canSeePrivate: true, fineGrained: true, reason: 'fine-grained token - repository grant is not enumerable' };
+  }
+  const scopes = header.split(',').map((s) => s.trim()).filter(Boolean);
+  return scopes.includes('repo')
+    ? { canSeePrivate: true, scopes, reason: 'classic token with repo scope' }
+    : { canSeePrivate: false, scopes, reason: `classic token without repo scope (has: ${scopes.join(', ') || 'none'}) - private repos answer 404 and are indistinguishable from deleted` };
+}
+
+async function repoExists(account, repo, token, visibility) {
+  if (account.host !== 'github.com') {
+    return { state: 'unsupported', detail: `no existence check implemented for ${account.host}` };
+  }
+  if (!token) return { state: 'inconclusive', detail: 'no token available to query the API' };
+  let res;
+  try {
+    res = await fetch(`https://api.github.com/repos/${repo.owner}/${repo.name}`, {
+      headers: { Authorization: `Bearer ${token}`, 'User-Agent': 'git-manager', Accept: 'application/vnd.github+json' },
+    });
+  } catch (err) {
+    return { state: 'inconclusive', detail: err.message };
+  }
+  if (res.status === 404) {
+    return visibility?.canSeePrivate
+      ? { state: 'gone', detail: 'HTTP 404' }
+      : { state: 'inconclusive', detail: `HTTP 404, but ${visibility?.reason ?? 'token visibility unknown'}` };
+  }
+  if (res.status === 401 || res.status === 403) return { state: 'inconclusive', detail: `HTTP ${res.status} - token rejected or insufficient scope, so absence cannot be concluded` };
+  if (!res.ok) return { state: 'inconclusive', detail: `HTTP ${res.status}` };
+  return { state: 'present', detail: `HTTP ${res.status}` };
+}
+
+/**
+ * Drop registry entries for repositories the provider no longer has.
+ *
+ * Registry-only. A local clone is never touched: it may hold unpushed work, and deleting a
+ * remote is not a statement about the working copy.
+ */
+async function cmdPruneRepos(args) {
+  const store = loadAccounts();
+  const targets = args.id ? [findAccount(store, args.id)] : store.accounts;
+  const removed = [];
+  let kept = 0, unknown = 0;
+
+  for (const account of targets) {
+    const repos = account.repositories ?? [];
+    if (!repos.length) continue;
+    const { token } = await readToken(account);
+    const visibility = account.host === 'github.com' ? await githubTokenVisibility(token) : null;
+    console.log(`\n${account.id}  (${repos.length} repo(s))`);
+    if (visibility) console.log(`  token visibility: ${visibility.reason}`);
+    if (visibility?.fineGrained) console.log('  NOTE: a 404 from a fine-grained token can also mean the repo was never granted to it.');
+
+    const results = await Promise.all(repos.map(async (r) => ({ repo: r, ...(await repoExists(account, r, token, visibility)) })));
+    for (const r of results) {
+      const local = r.repo.localPath && existsSync(r.repo.localPath) ? '' : '  [no local clone]';
+      console.log(`  ${r.state.padEnd(12)} ${r.repo.owner}/${r.repo.name}${local}${r.state === 'present' ? '' : `   ${r.detail}`}`);
+      if (r.state === 'gone') removed.push({ account, repo: r.repo });
+      else if (r.state === 'present') kept++;
+      else unknown++;
+    }
+    if (!args['dry-run']) {
+      const goneSet = new Set(results.filter((r) => r.state === 'gone').map((r) => `${r.repo.owner}/${r.repo.name}`));
+      account.repositories = repos.filter((r) => !goneSet.has(`${r.owner}/${r.name}`));
+    }
+  }
+
+  if (!args['dry-run'] && removed.length) saveAccounts(store);
+
+  // Report the size of the set SCANNED next to the hits, so "checked 0, removed 0" cannot pass
+  // for "checked 30, removed 0".
+  console.log(`\nchecked ${kept + unknown + removed.length}: ${kept} present, ${removed.length} gone, ${unknown} inconclusive`);
+  if (unknown) console.log('inconclusive entries were KEPT - absence was not established, only unverified.');
+  if (removed.length) {
+    console.log(args['dry-run'] ? '\nwould remove (dry run, nothing written):' : '\nremoved from the registry:');
+    for (const r of removed) console.log(`  ${r.account.id}: ${r.repo.owner}/${r.repo.name}${r.repo.localPath ? `   local clone left at ${r.repo.localPath}` : ''}`);
+  }
 }
 
 async function cmdSyncRepos(args) {
@@ -777,12 +1107,28 @@ async function cmdWhoami(args) {
     (a.owners ?? []).some((o) => o.toLowerCase() === p.owner.toLowerCase())));
   if (!hit) { console.log(`${p.host}/${p.owner}/${p.name} -> no registered account`); process.exitCode = 1; return; }
   console.log(`${p.host}/${p.owner}/${p.name} -> ${hit.id} (${hit.username})`);
+  console.log(`  declared commit identity  ${hit.email ? `${commitNameFor(hit)} <${hit.email}>` : 'NOT SET'}`);
+
+  // Report what git resolves here, not only what the registry declares. The two differ whenever
+  // a repo-local override is in force, and that difference is the whole failure mode.
+  if (!args.url) {
+    const target = resolve(args._[0] ?? process.cwd());
+    const live = await resolvedIdentity(target);
+    console.log(`  git resolves here         ${live.name ?? '(unset)'} <${live.email ?? '(unset)'}>`);
+    if (hit.email && live.email && live.email.toLowerCase() !== hit.email.toLowerCase()) {
+      console.log('  MISMATCH: a repo-local user.email overrides the account identity.');
+      console.log(`            git -C "${target}" config --unset user.email`);
+    }
+  }
 }
 
 async function cmdRepair() {
   const store = loadAccounts();
   const n = await applyRouting(store, { apply: true });
+  const ident = await applyIdentities(store, { apply: true });
   console.log(`refreshed ${n} owner route(s)`);
+  if (ident.unsupported) console.log(`commit identity SKIPPED: git ${MIN_GIT_FOR_IDENTITY.join('.')}+ required`);
+  else console.log(`refreshed commit identity for ${ident.accounts} account(s) (${ident.rules} include rule(s))`);
 }
 
 // ---------------------------------------------------------------- context + exec
@@ -877,6 +1223,12 @@ async function cmdContext(args) {
     lines.push(current.account
       ? `Current repo \`${current.repo}\` belongs to account \`${current.account.id}\` (${current.account.username}). Git operations authenticate automatically.`
       : `Current repo \`${current.repo}\` is not registered to any account. Run \`/git-manager\` to add it.`);
+    if (current.account) {
+      const live = await resolvedIdentity(cwd);
+      lines.push(current.account.email
+        ? `Commits here are authored as \`${commitNameFor(current.account)} <${live.email ?? current.account.email}>\`. Do not set \`user.email\` by hand; it is routed by remote URL.`
+        : `Account \`${current.account.id}\` has no commit email registered, so commits fall back to the global \`user.email\`${live.email ? ` (\`${live.email}\`)` : ''}. Fix it once with \`set-identity\` rather than per repo.`);
+    }
     lines.push('');
   }
 
@@ -915,7 +1267,7 @@ async function cmdInstallSchedule(args) {
   if (process.platform === 'win32') {
     const ps = join(scriptDir, 'install-schedule.ps1');
     console.log(`run this (it registers a Task Scheduler job at ${at}):\n`);
-    console.log(`  powershell -ExecutionPolicy Bypass -File "${ps}" -Time ${at}`);
+    console.log(`  powershell -NoProfile -File "${ps}" -Time ${at}`);
   } else {
     const sh = join(scriptDir, 'install-schedule.sh');
     console.log(`run this (it installs a cron entry at ${at}):\n`);
@@ -959,10 +1311,16 @@ git-manager - multi-account git credentials with an expiry watchdog
 
   set-token --id <id> [--from-env VAR]
   get-token --id <id> [--reveal]
-  add-account --id --host [--username] [--owners a,b]
+  set-identity --id <id> --email <e> [--name <n>]
+                               commit identity for the account, bound by remote URL so no repo
+                               ever needs a manual "git config user.email"
+  add-account --id --host [--username] [--email] [--name] [--owners a,b]
   remove-account --id <id>
   sync-repos [--roots a,b] [--dry-run]
-  repair                       re-apply owner routes to gitconfig
+  prune-repos [--id <id>] [--dry-run]
+                               drop registry entries whose repo the provider 404s on; a repo it
+                               cannot verify is KEPT, and no local clone is ever touched
+  repair                       re-apply owner routes and commit identities to gitconfig
 
 Secrets are never accepted on argv. Use --from-env VAR, or pipe on stdin.
 `;
@@ -979,9 +1337,11 @@ const COMMANDS = {
   'install-schedule': cmdInstallSchedule,
   'set-token': cmdSetToken,
   'get-token': cmdGetToken,
+  'set-identity': cmdSetIdentity,
   'add-account': cmdAddAccount,
   'remove-account': cmdRemoveAccount,
   'sync-repos': cmdSyncRepos,
+  'prune-repos': cmdPruneRepos,
   repair: cmdRepair,
 };
 

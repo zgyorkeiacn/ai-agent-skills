@@ -94,6 +94,123 @@ correctly configured machine. With one account on a host, git has nothing to dis
 
 **Lesson: a check that fires on a correct configuration trains people to ignore it.**
 
+## Authentication and authorship are different questions
+
+The registry routed credentials by owner from the start, and stopped there. Repointing a repo at
+another account therefore fixed the push and left the commit email wrong, which surfaced only
+when somebody noticed commits attributing to the wrong person. The manual `git config user.email`
+that fixes one repo is also what hides the gap, because it leaves every other repo under that
+account still wrong.
+
+Two candidate mechanisms:
+
+| Mechanism | Binds to | Fails when |
+|---|---|---|
+| `includeIf "gitdir:<path>"` | where the clone sits | a repo moves, is cloned outside the scanned roots, or is repointed at another account |
+| `includeIf "hasconfig:remote.*.url:<glob>"` | the remote URL | the URL is written in a form or casing no pattern covers |
+
+The remote-URL form was chosen because it binds identity to the **same axis the credential route
+already uses**. Any drift then affects both together rather than leaving them disagreeing, and
+the case the gitdir form gets wrong - a repointed remote - is exactly the case that motivated the
+feature.
+
+Measured behaviour, because none of it is stated plainly in the docs:
+
+| Remote URL | Pattern `https://github.com/acct/**` |
+|---|---|
+| `https://github.com/acct/x.git` | matches |
+| `https://github.com/acct/x` | matches |
+| `https://github.com/ACCT/x.git` | **no match** - case-sensitive |
+| `git@github.com:acct/x.git` | **no match** - literal on URL form |
+| `ssh://git@github.com/acct/x.git` | **no match** |
+
+Hence four patterns per owner, each also emitted lowercased. The SSH forms match once given
+their own patterns.
+
+**Lesson: a glob over a URL is not a URL matcher.** It does not normalise scheme, casing or the
+SCP-like form, so every form a remote can be written in needs its own pattern.
+
+### Two gates that look alike and are not
+
+`applyRouting` skips a host with only one account, correctly: git has nothing to disambiguate.
+Reusing that gate for identity would have been wrong, because git cannot infer an email from the
+number of accounts. The same applies to `authMode`: an `interactive-aad` account has no stored
+git token and still authors commits. The identity pass is therefore gated only on whether an
+email is declared.
+
+**Lesson: before reusing a guard, restate what it is protecting against in the new context.**
+
+### The version check is the feature
+
+`includeIf "hasconfig:"` needs Git 2.36. Older git does not warn, it ignores the section. A
+skill that wrote the config anyway would report success and leave authorship untouched, which is
+worse than not having the feature: the user stops checking. So the version is probed and
+`set-identity` exits non-zero when it cannot apply.
+
+**Lesson: a mechanism whose failure mode is silence must verify its own precondition.**
+
+### Local config still wins, on purpose
+
+A repo-local `user.email` outranks any global include. Overriding that would break a deliberate
+per-repo exception, so precedence is left as git defines it. The cost is that a stale local value
+silently defeats the account identity, so `doctor` reads what git actually RESOLVES in every
+registered repo and reports each mismatch with its `--unset` command, rather than trusting that
+writing the include was sufficient.
+
+**Lesson: verify the resolved value, not the write that was supposed to produce it.**
+
+## A 404 is a statement about the TOKEN as much as about the repo
+
+`prune-repos` removes registry entries for repositories the provider no longer has. The first
+implementation classified three ways - present, gone, inconclusive - specifically to avoid
+treating a network failure as a deletion. It still got the important case wrong.
+
+GitHub answers **404, not 403**, for a private repository a token cannot read, deliberately, so
+that it does not leak existence. A prune that reads 404 as "deleted" therefore removes every
+private repo the instant a token is under-scoped, and the output looks exactly like a genuine
+mass deletion: no error, no warning, just a long list of confident verdicts.
+
+It was caught by the COUNT. A 6-repo account reported 5 gone against a user who had deleted
+"a couple". Nothing in the tool's output was suspicious; the arithmetic was. The verdict then
+survived scrutiny - the token did hold `repo` scope, two independent methods agreed, and the
+repos really were deleted - but the near-miss was luck, not design.
+
+The fix establishes visibility BEFORE interpreting any 404:
+
+| `x-oauth-scopes` on `/user` | Meaning | 404 means |
+|---|---|---|
+| present, contains `repo` | classic PAT that can read private repos | `gone` |
+| present, no `repo` | classic PAT limited to public | `inconclusive` |
+| absent | fine-grained PAT; its grant is not enumerable from a header | `gone`, with a printed caveat |
+
+Note the header's absence means "cannot tell", not "no scopes" - reading an absent header as an
+empty scope list would have made every fine-grained token look powerless.
+
+**Lesson: a negative result from an authenticated API is conditioned on what that credential can
+see. Establish the observer's reach before believing the observation.** Same family as
+"a detector that reports zero must be distinguishable from one that is blind", and the reason the
+summary prints the size of the set scanned next to the number of hits.
+
+**Second lesson: an implausible proportion is the cheapest defect detector available.** It needs
+no instrumentation and it fired here when nothing else did.
+
+## Answering a question a directory cannot answer
+
+`discoverRepos` treated any directory where `git remote get-url origin` succeeded as a repo.
+That command succeeds from **anywhere inside a work tree**, so the test never distinguished a
+repo from a folder within one. Passing two repos as roots reported 30, and each registry entry
+kept whichever child sorted last - `.../services/agent/webui` instead of `.../services/agent`.
+
+Nothing failed. The paths looked plausible, and the only visible symptom was a repo count that
+was too high to be real.
+
+`rev-parse --show-toplevel` asks the actual question, and deduplicating on its answer collapses
+every child of one repo to a single entry. The root itself is now examined too, so pointing the
+scanner at a repo does the obvious thing instead of scanning past it.
+
+**Lesson: a command succeeding is not the proposition you wanted tested.** Same shape as the 404
+above - both took a convenient signal for the question actually being asked.
+
 ## Why not a password vault
 
 An earlier version included an AES-256-GCM vault with a scrypt-derived key for account passwords.

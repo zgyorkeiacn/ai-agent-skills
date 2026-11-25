@@ -1,0 +1,151 @@
+{
+  "$schema": "./pipeline.config.schema.json",
+  "_comment": "Written by /test-pipeline init. Every value came from the interview or an accepted default. Safe to hand-edit; re-run '/test-pipeline report' to see the effect without waiting for a scheduled run.",
+
+  "pipelineDir": "test-pipeline",
+  "runsDir": "test-pipeline/runs",
+  "reportsDir": "test-pipeline/reports",
+
+  "testsRoot": "tests",
+  "runner": {
+    "kind": "playwright",
+    "_kind_options": "playwright | junit",
+    "command": "npx playwright test",
+    "_command_tokens": "{env} and {baseUrl} are substituted before execution",
+    "resultsPath": "test-results/results.json",
+    "_resultsPath_note": "playwright: the JSON reporter output. junit: the XML file or a glob.",
+    "timeoutMinutes": 55
+  },
+
+  "_environments_note": "The seven eCare DAL environments, ALL DISABLED BY DEFAULT. Every one was probed on 2026-09-24: DNS resolves, TLS negotiates against a *.dx-<env>-blue wildcard cert, and the config endpoint returns 200 with a valid customer-account-V1 payload. Nothing is scheduled until you enable it - init asks which you want and sets enabled=true on those. Off by default on purpose: how many environments fit in one cycle depends on how long your suite takes, and enabling all seven at a 5 minute stagger spreads starts across 40 minutes, which does not fit an hourly cycle. Add your own environments here in the same shape.",
+  "environments": [
+    {
+      "name": "dev1",
+      "enabled": false,
+      "baseUrl": "https://dal.dx-dev1-blue.internal.vodafoneaws.co.uk/",
+      "env": { "VOXI_BASE_URL": "https://voxi.dx-dev1-blue.internal.vodafoneaws.co.uk" },
+      "probe": { "kind": "http", "path": "/configuration/customer-account-V1/default", "expectStatus": 200, "timeoutSeconds": 20, "attempts": 3, "retryGapSeconds": 3 }
+    },
+    {
+      "name": "int1",
+      "enabled": false,
+      "baseUrl": "https://dal.dx-int1-blue.internal.vodafoneaws.co.uk/",
+      "env": { "VOXI_BASE_URL": "https://voxi.dx-int1-blue.internal.vodafoneaws.co.uk" },
+      "probe": { "kind": "http", "path": "/configuration/customer-account-V1/default", "expectStatus": 200, "timeoutSeconds": 20, "attempts": 3, "retryGapSeconds": 3 }
+    },
+    {
+      "name": "qc2",
+      "enabled": false,
+      "baseUrl": "https://dal.dx-qc2-blue.internal.vodafoneaws.co.uk/",
+      "env": { "VOXI_BASE_URL": "https://voxi.dx-qc2-blue.internal.vodafoneaws.co.uk" },
+      "probe": { "kind": "http", "path": "/configuration/customer-account-V1/default", "expectStatus": 200, "timeoutSeconds": 20, "attempts": 3, "retryGapSeconds": 3 }
+    },
+    {
+      "name": "prodsup",
+      "enabled": false,
+      "baseUrl": "https://dal.dx-prodsup-blue.internal.vodafoneaws.co.uk/",
+      "env": { "VOXI_BASE_URL": "https://voxi.dx-prodsup-blue.internal.vodafoneaws.co.uk" },
+      "probe": { "kind": "http", "path": "/configuration/customer-account-V1/default", "expectStatus": 200, "timeoutSeconds": 20, "attempts": 3, "retryGapSeconds": 3 }
+    },
+    {
+      "name": "qc1",
+      "enabled": false,
+      "baseUrl": "https://dal.dx-qc1-blue.internal.vodafoneaws.co.uk/",
+      "env": { "VOXI_BASE_URL": "https://voxi.dx-qc1-blue.internal.vodafoneaws.co.uk" },
+      "probe": { "kind": "http", "path": "/configuration/customer-account-V1/default", "expectStatus": 200, "timeoutSeconds": 20, "attempts": 3, "retryGapSeconds": 3 }
+    },
+    {
+      "name": "qc5",
+      "enabled": false,
+      "baseUrl": "https://dal.dx-qc5-blue.internal.vodafoneaws.co.uk/",
+      "env": { "VOXI_BASE_URL": "https://voxi.dx-qc5-blue.internal.vodafoneaws.co.uk" },
+      "probe": { "kind": "http", "path": "/configuration/customer-account-V1/default", "expectStatus": 200, "timeoutSeconds": 20, "attempts": 3, "retryGapSeconds": 3 }
+    },
+    {
+      "name": "qcx",
+      "enabled": false,
+      "baseUrl": "https://dal.dx-qcx-blue.internal.vodafoneaws.co.uk/",
+      "env": { "VOXI_BASE_URL": "https://voxi.dx-qcx-blue.internal.vodafoneaws.co.uk" },
+      "probe": { "kind": "http", "path": "/configuration/customer-account-V1/default", "expectStatus": 200, "timeoutSeconds": 20, "attempts": 3, "retryGapSeconds": 3 }
+    }
+  ],
+  "_ci_note": "CI intake. Instead of running the suite, an environment can read finished pipeline runs from Azure DevOps or GitHub Actions: give it \"source\": \"ci\" and a \"ci\" block like the one in ciEnvironmentExample (copy it into environments[] and drop the leading underscore name). No probe and no runner.command apply to it. Each poll lists the newest completed runs, skips any already recorded (by run id, in history.jsonl and runs/ci-state.json), and appends the rest to the same history, so every report and analyse cover CI runs too. The token is read ONLY from the environment variable named in tokenEnv (default AZURE_DEVOPS_PAT / GITHUB_TOKEN); it is never stored in this file, passed on a command line or logged. Needs read-only scopes: ADO Build (read) and Test Management (read); GitHub Actions (read).",
+  "ciEnvironmentExample": {
+    "name": "ado-main",
+    "enabled": false,
+    "source": "ci",
+    "ci": {
+      "provider": "azure-devops",
+      "organization": "acme",
+      "project": "shop",
+      "pipelineId": 42,
+      "branch": "main",
+      "mode": "test-results",
+      "_mode_note": "azure-devops only. test-results = the run's published test results (REST); artifacts = a JUnit/Playwright artifact zip.",
+      "artifactName": null,
+      "resultsKind": "junit",
+      "resultsFile": null,
+      "_resultsFile_note": "artifacts mode: a file or glob inside the artifact, e.g. **/results.xml or **/results.json. Default **/*.xml (junit) or **/*.json (playwright).",
+      "tokenEnv": "AZURE_DEVOPS_PAT",
+      "maxRunsPerPoll": 5,
+      "_github_shape": "{ \"provider\": \"github\", \"owner\": \"acme\", \"repo\": \"shop\", \"workflow\": \"e2e.yml\", \"branch\": \"main\", \"artifactName\": \"playwright-report\", \"resultsKind\": \"playwright\", \"tokenEnv\": \"GITHUB_TOKEN\" }"
+    }
+  },
+
+  "_probe_retry_note": "attempts/retryGapSeconds exist because first contact with a host can fail while a VPN or zero-trust tunnel establishes its route - three of these environments failed on first touch and succeeded moments later. A single-shot probe turns that into a skipped run every time the machine wakes, which is indistinguishable from a real outage in the skip log. A non-2xx response is NOT retried: that is the environment answering and declining, and it will not change its mind.",
+  "_env_field_note": "environments[].env holds extra variables exported before the command runs; values may contain {baseUrl}. VOXI_BASE_URL is a second service URL that must stay in lockstep with the primary - the source pipeline derived it with a regex in three separate places that disagreed on the fallback, which is why it is stated explicitly per environment here.",
+  "_probe_note": "The probe path is a config endpoint that returns 200 on a healthy environment. An HTTP probe rather than a TCP connect is deliberate: a dead environment often still accepts connections and answers 503 to everything, which a TCP probe reads as healthy and which then produces an entire red run that means nothing.",
+
+  "schedule": {
+    "startHour": 9,
+    "endHour": 19,
+    "startMinute": 10,
+    "jitterMinutes": 10,
+    "_jitter_note": "Start is randomised across startMinute..startMinute+jitterMinutes. A fixed start cannot distinguish a broken environment from one that is busy with everything else scheduled on the hour.",
+    "everyHours": 1,
+    "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+    "staggerMinutes": 5,
+    "_stagger_note": "Offset applied per environment index, so they do not contend on a shared gateway. 0 disables.",
+    "cycleWaitMinutes": 20,
+    "_cycleWait_note": "How long the first environment to finish waits for the others before reporting anyway."
+  },
+
+  "reports": {
+    "perRun": true,
+    "dailyOnePager": true,
+    "perScenario": true,
+    "comparison": true,
+    "_comparison_note": "Ignored when only one environment is configured.",
+    "pdf": true,
+    "_pdf_note": "Requires a Chromium available to the host. Silently skipped if absent."
+  },
+
+  "analysis": {
+    "excludeHours": [],
+    "_excludeHours_note": "Hours (local, 0-23) dropped from EVERY report. Use only for a slot that is reliably dead - a nightly deploy window. An excluded hour is invisible, not zero, so this must be applied consistently or two reports will disagree about the totals.",
+    "normaliseSignatures": true,
+    "_normalise_note": "Masks UUIDs, timestamps, long digit runs and URLs in failure signatures at read time, so one recurring fault aggregates instead of looking like a new fault every run.",
+    "flakeDetection": true,
+    "apiSourceDir": null,
+    "_apiSourceDir_note": "Optional. A directory of API client modules; lets attribution name the endpoint behind a failure. Attribution degrades gracefully to 'unattributed' when null."
+  },
+
+  "retention": {
+    "runLogs": 200,
+    "failureArtefactRuns": 24,
+    "historyRecords": null,
+    "_historyRecords_note": "null means keep everything. The history is one line per run and is what every report is built from."
+  },
+
+  "branding": {
+    "title": "Test pipeline",
+    "subtitle": "",
+    "palette": {
+      "accent": "#2563eb",
+      "ok": "#16a34a",
+      "warn": "#d97706",
+      "bad": "#dc2626",
+      "ink": "#1f2937"
+    }
+  }
+}

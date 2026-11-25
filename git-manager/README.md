@@ -32,7 +32,7 @@ scheduled task is a persistent change to your machine:
 
 ```
 # Windows
-powershell -ExecutionPolicy Bypass -File scripts/install-schedule.ps1 -Time 09:00
+powershell -NoProfile -File scripts/install-schedule.ps1 -Time 09:00
 
 # macOS / Linux
 bash scripts/install-schedule.sh --time 09:00
@@ -46,9 +46,34 @@ stays silent unless something needs attention.
 ```
 /git-manager              # status summary
 /git-manager probe        # check every token right now
-/git-manager doctor       # routing, tokens, and whether the daily check is still running
-/git-manager whoami       # which account owns the repo you are standing in
+/git-manager doctor       # routing, identity, tokens, and whether the daily check is still running
+/git-manager whoami       # which account owns the repo you are standing in, and who it commits as
 ```
+
+## Commit identity follows the remote
+
+Authenticating as the right account and committing as the right person are separate settings, so
+a repo can push correctly and still author under the wrong address. Nothing fails, which is why
+it is usually noticed late, and correcting it afterwards rewrites every SHA from that commit on.
+
+Each account carries a commit email. It is bound by **remote URL**, so a repo picks up the right
+authorship the moment its remote points at that account, including a brand new clone and
+including a repo whose remote you just repointed:
+
+```
+node scripts/creds.mjs set-identity --id github-work --email you@company.com
+```
+
+Set once per account, never per repo. `git config user.email` in a single repo is the manual step
+this replaces, and it masks the real gap: if the account has no email, every other repo under it
+is still wrong.
+
+A repo-local `user.email` you set yourself still wins, as git normally defines precedence.
+`doctor` reports every registered repo whose resolved address disagrees with its account, with
+the command to clear it.
+
+Needs Git 2.36+ (`includeIf "hasconfig:"`). Below that, `set-identity` stores the address, tells
+you it could not apply it, and exits non-zero rather than reporting a success that did nothing.
 
 ## Credentials where you need them
 
@@ -88,8 +113,9 @@ On macOS or Linux use `bash "<skill>/hooks/credential-context.sh"` instead.
 
 | What | Where |
 |---|---|
-| Account metadata: id, username, host, repositories | `~/.claude/credentials/accounts.json`, plaintext |
+| Account metadata: id, username, email, host, repositories | `~/.claude/credentials/accounts.json`, plaintext |
 | Tokens | Your OS keychain, via git's own credential helper |
+| Commit identity | `~/.claude/credentials/identity-<id>.gitconfig`, included by remote URL |
 | Last probe result | `~/.claude/credentials/pat-status.json` |
 
 Tokens go through `git credential`, not a platform-specific keychain API. That is what makes it
@@ -155,13 +181,31 @@ Or manually, if you prefer:
 
 ```
 node scripts/creds.mjs add-account --id github-newthing --host github.com \
-  --username <user> --owners <org>
+  --username <user> --email <you@example.com> --owners <org>
 node scripts/creds.mjs set-token --id github-newthing --from-env SOME_VAR
 node scripts/creds.mjs sync-repos && node scripts/creds.mjs doctor
 ```
 
-`add-account` applies the routing for you. Doing it by hand and forgetting the route is exactly
-the collision this skill exists to prevent, which is why `doctor` checks for it.
+`add-account` applies the routing and the commit identity for you. Doing it by hand and
+forgetting either is exactly what this skill exists to prevent, which is why `doctor` checks for
+both. Omitting `--email` is allowed and reported, not silently accepted.
+
+## Removing repos that no longer exist
+
+`sync-repos` only adds. When a repo is deleted on the provider its registry entry lingers:
+
+```
+node scripts/creds.mjs prune-repos --id github-personal --dry-run
+node scripts/creds.mjs prune-repos --id github-personal
+```
+
+It will not take a 404 at face value. GitHub returns 404 rather than 403 for a private repo a
+token cannot read, so an under-scoped token would make every private repo look deleted. The
+token's reach is checked first, and anything it cannot conclusively see is reported
+`inconclusive` and **kept**.
+
+Local clones are never touched. A clone whose remote is gone is reported with its path, since it
+can no longer push.
 
 ## Safety
 
@@ -169,8 +213,12 @@ the collision this skill exists to prevent, which is why `doctor` checks for it.
   history. Use `--from-env VAR` or pipe on stdin.
 - Tokens are printed masked unless you pass `--reveal`.
 - Scheduler installers are printed, never run automatically.
-- `remove-account` drops the metadata, the tokens **and** the routes together, so deleting an
-  account cannot leave orphaned credentials behind.
+- `remove-account` drops the metadata, the tokens, the routes **and** the commit identity
+  together, so deleting an account cannot leave orphaned credentials or a stale author address
+  behind.
+- A commit email is never guessed. A wrong one fails silently and unwinding it rewrites history.
+- `prune-repos` deletes registry entries only, never a working copy, and never acts on a repo
+  whose absence it could not establish.
 
 ## Known limits
 
@@ -181,6 +229,12 @@ the collision this skill exists to prevent, which is why `doctor` checks for it.
   it can read tokens. The probe log is where that surfaces.
 - Repo discovery walks each root one level deep. Nested layouts need the inner directory listed
   as its own root.
+- Commit-identity patterns are emitted for the owner as declared and lowercased. An owner written
+  in some third casing in a remote URL is not matched, because git's `hasconfig:` glob is
+  case-sensitive. Declare the owner as it appears in the remote.
+- `doctor`'s identity drift check only sees repos the registry knows about. A clone that was
+  never registered picks up the right identity automatically but cannot be reported on; run
+  `sync-repos` to bring it into view.
 
 See `references/design.md` for why things are built this way, including the measurements that
 overturned the original design.

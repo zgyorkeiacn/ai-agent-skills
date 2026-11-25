@@ -1,0 +1,21 @@
+{
+  "_note": "Recorded-shape fixtures for the Azure DevOps REST API 7.1 and the GitHub Actions API. Hand-trimmed to the fields the intake reads.",
+  "ado_builds": { "count": 2, "value": [
+    { "id": 202, "buildNumber": "20261120.2", "status": "completed", "result": "failed", "startTime": "2026-11-20T10:00:00Z", "finishTime": "2026-11-20T10:20:00Z" },
+    { "id": 201, "buildNumber": "20261120.1", "status": "completed", "result": "succeeded", "startTime": "2026-11-20T08:00:00Z", "finishTime": "2026-11-20T08:15:00Z" } ] },
+  "ado_test_runs": { "count": 1, "value": [ { "id": 9001, "name": "e2e" } ] },
+  "ado_test_results": { "count": 3, "value": [
+    { "testCaseTitle": "login works", "automatedTestStorage": "tests/login.spec.ts", "outcome": "Passed", "durationInMs": 1200 },
+    { "testCaseTitle": "checkout pays", "automatedTestStorage": "tests/checkout.spec.ts", "outcome": "Failed", "durationInMs": 3400, "errorMessage": "expect(received).toBe(expected) - Timeout 30000ms exceeded waiting for locator", "stackTrace": "at checkout.spec.ts:12" },
+    { "testCaseTitle": "legacy flow", "automatedTestStorage": "tests/legacy.spec.ts", "outcome": "NotExecuted", "durationInMs": 0 } ] },
+  "ado_artifacts": { "count": 1, "value": [ { "id": 1, "name": "junit", "resource": { "downloadUrl": "https://dev.azure.com/acme/shop/_apis/build/builds/202/artifacts?artifactName=junit&format=zip" } } ] },
+  "gh_runs": { "total_count": 2, "workflow_runs": [
+    { "id": 7002, "name": "e2e", "run_number": 12, "conclusion": "failure", "run_started_at": "2026-11-20T10:00:00Z", "updated_at": "2026-11-20T10:25:00Z" },
+    { "id": 7001, "name": "e2e", "run_number": 11, "conclusion": "success", "run_started_at": "2026-11-20T08:00:00Z", "updated_at": "2026-11-20T08:20:00Z" } ] },
+  "gh_artifacts": { "total_count": 1, "artifacts": [ { "id": 55, "name": "playwright-report", "expired": false, "archive_download_url": "https://api.github.com/repos/acme/shop/actions/artifacts/55/zip" } ] },
+  "gh_artifacts_empty": { "total_count": 0, "artifacts": [] },
+  "playwright_json": {
+    "suites": [ { "title": "checkout.spec.ts", "file": "checkout.spec.ts", "specs": [
+      { "title": "checkout pays", "file": "checkout.spec.ts", "tests": [ { "status": "unexpected", "results": [ { "status": "failed", "duration": 2000, "error": { "message": "Timeout 30000ms exceeded waiting for locator" } } ] } ] },
+      { "title": "cart totals", "file": "checkout.spec.ts", "tests": [ { "status": "expected", "results": [ { "status": "passed", "duration": 900 } ] } ] } ] } ] }
+}

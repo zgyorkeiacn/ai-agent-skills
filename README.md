@@ -4,6 +4,33 @@ Reusable skills for AI coding agents (GitHub Copilot, Gemini, Claude, etc.) to e
 
 ## 📦 Skills Included
 
+### ⏱️ test-pipeline
+Scaffold a scheduled test-execution and reporting pipeline into any repo, then analyse the results.
+Interviews for tests root, environments, time slot and reports; generates a headless runner, result
+ingestion, HTML/PDF reports and a scheduled task (Windows Task Scheduler or cron). Runner-agnostic
+(Playwright JSON or JUnit XML), any number of environments. Also provides on-demand failure analysis
+that separates environment faults from product faults, flags flaky tests, and suggests fixes.
+
+**Key Features:**
+- One scheduled task per environment; exactly one builds the reports per cycle
+- Signature normalisation so recurring faults aggregate instead of looking like one-offs
+- Flake detection that distinguishes broken from flaky from a fixed regression
+- `doctor` mode that catches a pipeline which has silently stopped running
+- Self-building `knowledge.yaml` - curated findings always beat the built-in heuristics
+- Copilot-first: sliced into small steps with on-disk progress tracking
+
+[📖 Full Documentation](test-pipeline/README.md)
+
+### 📊 defect-analysis
+End-to-end pipeline for filling in the eCare Defect Analysis Tracker Excel file from live ADO ticket data.
+Filters rows by POC name(s) and PI, fetches each ADO ticket, verifies/corrects Bug RCA, writes
+justification, classifies FE/BE area, fills Resolution and Bucket columns, adds Raised By,
+saves the Excel, and patches the ADO `VFDigitalAgile.RootCauseAnalysis` field for every ticket
+whose RCA changed (with an audit comment). Config (names, PI, PAT, org, file path) is saved on
+first run and reused automatically.
+
+[📖 Full Documentation](defect-analysis/SKILL.md)
+
 ### 🔗 repo-dependency-analysis
 Analyze and track dependencies between interconnected code repositories. Detects ripple effects when changes are made to shared contracts, APIs, types, or configurations.
 

@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<title>ADO Story Creator — one-pager</title>
+<style>
+/* ─────────────────────────────────────────────────────────────────────────────
+   Vodafone UK palette. The fan-out chart is a SINGLE-SERIES magnitude chart
+   (item count across four hierarchy levels), so it uses one hue — #E60000,
+   which clears contrast vs surface at ≥3:1 — and needs no legend, because the
+   title names the series. Every bar is directly labelled and a field table is
+   present, so identity is never carried by colour alone. Light/print only.
+   ───────────────────────────────────────────────────────────────────────────── */
+:root{
+  --vf-red:#E60000;        /* Vodafone Red  — data + hero */
+  --vf-red-lt:#F08A8A;     /* tint */
+  --vf-aqua:#00B0CA;       /* Vodafone Aqua */
+  --vf-anchor:#4A4D4E;     /* Vodafone Anchor grey */
+  --vf-green:#A8B400;      /* Spring Green — status: good */
+  --vf-plum:#5E2750;       /* Aubergine */
+
+  --ink:#1c1e1f;
+  --ink-2:#494c4d;
+  --ink-3:#7b7f81;
+  --surface:#ffffff;
+  --surface-2:#f6f6f4;
+  --surface-3:#ececea;
+  --rule:#dcdcd9;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+
+html,body{
+  font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+  color:var(--ink);background:var(--surface-3);
+  -webkit-font-smoothing:antialiased;
+}
+
+.page{
+  width:297mm;height:210mm;margin:8mm auto;padding:6.5mm 8mm 4.5mm;
+  background:var(--surface);display:flex;flex-direction:column;gap:2.5mm;
+  box-shadow:0 2px 18px rgba(0,0,0,.18);overflow:hidden;
+}
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+.hdr{flex:none;display:flex;align-items:flex-start;gap:4.2mm;padding-bottom:1.8mm;border-bottom:2.5px solid var(--vf-red)}
+.quote{flex:none;width:11.5mm;height:11.5mm;border-radius:50% 50% 50% 8%;background:var(--vf-red);position:relative}
+.quote::after{content:"";position:absolute;left:3mm;top:3mm;width:5.5mm;height:5.5mm;border-radius:50% 50% 50% 10%;background:#fff}
+.hdr-txt{flex:1;min-width:0}
+.hdr h1{font-size:16.4pt;font-weight:700;letter-spacing:-.35pt;line-height:1.03}
+.hdr h1 em{font-style:normal;color:var(--vf-red)}
+.hdr .sub{font-size:8.15pt;color:var(--ink-2);margin-top:.9mm;line-height:1.28}
+.hdr .sub b{color:var(--ink)}
+.hdr .sub code{font-family:Consolas,"Courier New",monospace;font-size:7.6pt;background:var(--surface-2);padding:.2mm .8mm;border-radius:2px;color:var(--vf-plum)}
+.pills{display:flex;flex-wrap:wrap;gap:1.2mm;margin-top:1.2mm}
+.pill{font-size:6.6pt;font-weight:700;letter-spacing:.3pt;text-transform:uppercase;padding:.7mm 2mm;border-radius:9px;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--rule)}
+.pill.hot{background:var(--vf-red);color:#fff;border-color:var(--vf-red)}
+.stamp{flex:none;text-align:right;font-size:6.8pt;color:var(--ink-3);line-height:1.45}
+.stamp b{display:block;font-size:11pt;color:var(--vf-red);letter-spacing:-.3pt;margin-bottom:.4mm}
+
+/* ── KPI tiles ────────────────────────────────────────────────────────────── */
+.kpis{flex:none;display:grid;grid-template-columns:repeat(5,1fr);gap:2.4mm}
+.kpi{background:var(--surface-2);border:1px solid var(--rule);border-top:2.5px solid var(--vf-red);border-radius:2px;padding:2mm 2.4mm 1.8mm}
+.kpi .n{font-size:16.5pt;font-weight:700;letter-spacing:-.6pt;line-height:1;color:var(--vf-red)}
+.kpi .n small{font-size:9pt;font-weight:700;letter-spacing:0}
+.kpi .l{font-size:7.1pt;font-weight:700;color:var(--ink);margin-top:1mm;line-height:1.2}
+.kpi .s{font-size:6.4pt;color:var(--ink-3);margin-top:.4mm;line-height:1.22}
+.kpi.alt{border-top-color:var(--vf-anchor)}
+.kpi.alt .n{color:var(--vf-anchor)}
+
+/* ── Mid grid ─────────────────────────────────────────────────────────────── */
+.mid{flex:none;display:grid;grid-template-columns:1.04fr 1fr;gap:3.2mm}
+.panel{border:1px solid var(--rule);border-radius:2px;padding:2.1mm 2.6mm;display:flex;flex-direction:column;min-width:0}
+.panel h2{font-size:7.9pt;font-weight:700;text-transform:uppercase;letter-spacing:.55pt;color:var(--ink);padding-bottom:1.1mm;margin-bottom:1.5mm;border-bottom:1px solid var(--rule);display:flex;align-items:baseline;gap:2mm}
+.panel h2 span{font-size:6.5pt;font-weight:600;letter-spacing:.2pt;color:var(--ink-3);text-transform:none;margin-left:auto}
+
+/* Fan-out chart — single series, square at baseline, 4px rounded data-end */
+.bars{display:flex;flex-direction:column;gap:1.3mm}
+.barrow{display:grid;grid-template-columns:17mm 1fr;align-items:center;gap:2.2mm}
+.barrow .who{font-size:7.3pt;font-weight:700;color:var(--ink);line-height:1.12}
+.barrow .who i{display:block;font-style:normal;font-size:6.2pt;font-weight:600;color:var(--ink-3)}
+.track{position:relative;height:13px;background:var(--surface-2);border-radius:2px}
+.bar{height:13px;border-radius:0 4px 4px 0;background:var(--vf-red);transition:filter .12s}
+.bar:hover{filter:brightness(1.08)}
+.bar[data-tip]{position:relative}
+.bar[data-tip]:hover::after{content:attr(data-tip);position:absolute;left:50%;top:-8mm;transform:translateX(-50%);background:var(--ink);color:#fff;font-size:6.6pt;font-weight:600;padding:.9mm 1.9mm;border-radius:3px;white-space:nowrap;z-index:5;box-shadow:0 1px 6px rgba(0,0,0,.28)}
+.val{position:absolute;top:0;height:13px;display:flex;align-items:center;font-size:7.6pt;font-weight:700;color:var(--ink);white-space:nowrap;left:calc(var(--at,100%) + 1.6mm)}
+.val em{font-style:normal;font-weight:600;font-size:6.3pt;color:var(--ink-3);margin-left:1.1mm}
+.axis{display:flex;justify-content:space-between;font-size:6.1pt;color:var(--ink-3);border-top:1px solid var(--rule);margin-top:.9mm;padding-top:.6mm}
+.delta{margin-top:1.3mm;padding:1.3mm 2mm;background:#fff5f5;border:1px solid #f6cccc;border-left:2.5px solid var(--vf-red);border-radius:2px;font-size:6.85pt;color:var(--ink-2);line-height:1.27}
+.delta b{color:var(--vf-red)}
+.prov{margin-top:1.3mm;font-size:6.15pt;line-height:1.26;color:var(--ink-3)}
+.prov b{color:var(--ink-2)}
+
+/* Field table */
+.tbl{width:100%;border-collapse:collapse;font-size:6.7pt;margin-top:1.4mm}
+.tbl th{text-align:left;font-size:6pt;text-transform:uppercase;letter-spacing:.3pt;color:var(--ink-3);font-weight:700;padding:0 1.2mm .7mm 0;border-bottom:1px solid var(--rule)}
+.tbl td{padding:.62mm 1.2mm .62mm 0;border-bottom:1px solid var(--surface-3);color:var(--ink-2)}
+.tbl td.j{color:var(--ink);font-weight:600;white-space:nowrap}
+.tbl tr:last-child td{border-bottom:none}
+
+/* Value list */
+.adv{display:flex;flex-direction:column;gap:1.25mm}
+.ai{display:grid;grid-template-columns:4.4mm 1fr;gap:1.5mm;align-items:start}
+.ai .ic{width:4.4mm;height:4.4mm;border-radius:50%;background:var(--vf-red);color:#fff;font-size:6.4pt;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:.15mm}
+.ai .ic.g{background:var(--vf-green)}
+.ai .ic.a{background:var(--vf-anchor)}
+.ai p{font-size:7.1pt;line-height:1.23;color:var(--ink-2)}
+.ai p b{color:var(--ink)}
+.ai p code{font-family:Consolas,"Courier New",monospace;font-size:6.2pt;background:var(--surface-2);padding:.1mm .6mm;border-radius:2px;color:var(--vf-plum)}
+
+/* ── Guard-rail band ──────────────────────────────────────────────────────── */
+.pf{flex:none;border:1px solid var(--rule);border-top:2.5px solid var(--vf-red);border-radius:2px;padding:2.4mm 2.8mm;background:var(--surface-2)}
+.pf-hd{display:flex;align-items:baseline;gap:2.4mm;margin-bottom:1.7mm}
+.pf-hd h2{font-size:8.3pt;font-weight:700;text-transform:uppercase;letter-spacing:.55pt}
+.pf-hd .tag{flex:none;font-size:6.3pt;font-weight:700;text-transform:uppercase;letter-spacing:.4pt;background:var(--vf-red);color:#fff;padding:.6mm 1.9mm;border-radius:8px}
+.pf-hd .note{margin-left:auto;font-size:6.6pt;color:var(--ink-3);font-weight:600;white-space:nowrap}
+.pf-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2.4mm}
+.pf-col{background:#fff;border:1px solid var(--rule);border-radius:2px;padding:2mm 2.2mm}
+.pf-col h3{font-size:6.9pt;font-weight:700;color:var(--ink);margin-bottom:1.2mm;display:flex;align-items:center;gap:1.4mm}
+.pf-col h3 .step{flex:none;width:4mm;height:4mm;border-radius:2px;background:var(--vf-red);color:#fff;font-size:6.2pt;display:flex;align-items:center;justify-content:center}
+.pf-col ul{list-style:none;display:flex;flex-direction:column;gap:.8mm}
+.pf-col li{font-size:6.55pt;line-height:1.28;color:var(--ink-2);padding-left:2.2mm;position:relative}
+.pf-col li::before{content:"";position:absolute;left:0;top:1.4mm;width:1.1mm;height:1.1mm;border-radius:50%;background:var(--vf-red)}
+.pf-col li b{color:var(--ink)}
+.pf-col code{font-family:Consolas,"Courier New",monospace;font-size:6pt;background:var(--surface-2);padding:.1mm .6mm;border-radius:2px;color:var(--vf-plum)}
+.verdicts{display:flex;flex-wrap:wrap;gap:.9mm;margin-top:1.3mm}
+.v{font-size:5.7pt;font-weight:700;letter-spacing:.2pt;padding:.45mm 1.2mm;border-radius:2px;border:1px solid}
+.v.ok{background:#f2f6e0;color:#5b6300;border-color:#d8e08f}
+.v.fix{background:#fff5f5;color:var(--vf-red);border-color:#f6cccc}
+.v.no{background:var(--surface-2);color:var(--ink-3);border-color:var(--rule)}
+.failopen{margin-top:1.7mm;padding:1.8mm 2.4mm;background:#fff;border:1px solid var(--rule);border-left:2.5px solid var(--vf-green);border-radius:2px;font-size:6.9pt;color:var(--ink-2);line-height:1.29}
+.failopen b{color:var(--ink)}
+.failopen code{font-family:Consolas,"Courier New",monospace;font-size:6.2pt;background:var(--surface-2);padding:.1mm .6mm;border-radius:2px;color:var(--vf-plum)}
+
+/* ── Footer ───────────────────────────────────────────────────────────────── */
+.ftr{flex:none;margin-top:auto;display:flex;align-items:center;gap:3mm;border-top:1px solid var(--rule);padding-top:1.7mm}
+.road{display:flex;flex:1;flex-wrap:nowrap}
+.road span{font-size:6.35pt;color:var(--ink-2);padding-right:2.1mm;margin-right:2.1mm;border-right:1px solid var(--rule);white-space:nowrap}
+.road span:last-child{border-right:none}
+.road span b{color:var(--vf-red)}
+.ftr .brand{font-size:6.6pt;font-weight:700;color:var(--vf-red);white-space:nowrap}
+
+@media print{
+  @page{size:A4 landscape;margin:0}
+  html,body{background:#fff}
+  .page{margin:0;box-shadow:none;width:297mm;height:210mm}
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ── Header ─────────────────────────────────────────────────────────── -->
+  <div class="hdr">
+    <div class="quote"></div>
+    <div class="hdr-txt">
+      <h1>ADO Story Creator<br><em>A spec goes in. A refined, linked, sprint-planned backlog comes out.</em></h1>
+      <p class="sub">
+        A Claude Code skill that turns a Word or Excel spec, a plan-on-a-page, or a git branch into a fully linked Azure
+        DevOps <b>Epic → Feature → User Story → Task</b> hierarchy — Given/When/Then acceptance criteria, Fibonacci points,
+        discipline tags, swimlane placement, real sprint assignment. One command: <code>/ado-story-creator</code>.
+      </p>
+      <div class="pills">
+        <span class="pill hot">Preview-Gated</span>
+        <span class="pill">3 Input Modes</span>
+        <span class="pill">100% Given/When/Then</span>
+        <span class="pill">Sprint Planning</span>
+        <span class="pill">Self-Correcting</span>
+        <span class="pill">No Code Required</span>
+      </div>
+    </div>
+    <div class="stamp">
+      <b>Spec → Backlog</b>
+      PO · BA · Scrum Master<br>
+      Delivery Lead<br>
+      Vodafone UK Digital
+    </div>
+  </div>
+
+  <!-- ── KPI tiles ──────────────────────────────────────────────────────── -->
+  <div class="kpis">
+    <div class="kpi">
+      <div class="n">63</div>
+      <div class="l">Linked items from one document</div>
+      <div class="s">2 Epics, 5 Features, 14 Stories, 42 Tasks</div>
+    </div>
+    <div class="kpi">
+      <div class="n">3</div>
+      <div class="l">Ways in</div>
+      <div class="s">Spec/LLD · plan doc · git branch</div>
+    </div>
+    <div class="kpi">
+      <div class="n">100<small>%</small></div>
+      <div class="l">ACs in Given/When/Then</div>
+      <div class="s">≥2 positive + ≥1 negative, every story</div>
+    </div>
+    <div class="kpi">
+      <div class="n">0</div>
+      <div class="l">Writes before you approve</div>
+      <div class="s">Cancel at any point · nothing created</div>
+    </div>
+    <div class="kpi alt">
+      <div class="n">3</div>
+      <div class="l">Velocity dimensions planned</div>
+      <div class="s">Backend / frontend / testing capacity</div>
+    </div>
+  </div>
+
+  <!-- ── Mid: fan-out + value ───────────────────────────────────────────── -->
+  <div class="mid">
+
+    <div class="panel">
+      <h2>One Document In, A Linked Backlog Out <span>work items created per level</span></h2>
+
+      <div class="bars">
+        <div class="barrow">
+          <div class="who">Epics<i>3–6 typical</i></div>
+          <div class="track">
+            <div class="bar" style="width:4.2%" data-tip="Pass 1 — 2 Epics identified from the document structure"></div>
+            <span class="val" style="--at:4.2%">2 <em>major areas of work</em></span>
+          </div>
+        </div>
+        <div class="barrow">
+          <div class="who">Features<i>2–5 per Epic</i></div>
+          <div class="track">
+            <div class="bar" style="width:10.5%" data-tip="Pass 1 — 5 Features grouped under the Epics"></div>
+            <span class="val" style="--at:10.5%">5 <em>functional areas</em></span>
+          </div>
+        </div>
+        <div class="barrow">
+          <div class="who">User Stories<i>2–5 per Feature</i></div>
+          <div class="track">
+            <div class="bar" style="width:29.3%" data-tip="Pass 2 — 14 stories in As a / I want / So that form"></div>
+            <span class="val" style="--at:29.3%">14 <em>with ACs, points, tags</em></span>
+          </div>
+        </div>
+        <div class="barrow">
+          <div class="who">Tasks<i>3–5 per Story</i></div>
+          <div class="track">
+            <div class="bar" style="width:88%" data-tip="Pass 3 — 42 atomic tasks, each with a verification check"></div>
+            <span class="val" style="--at:88%">42</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="delta">
+        <b>Four passes, not one prompt.</b> Pass 1 pulls Epics and Features from your headings; Pass 2 writes the stories;
+        Pass 3 enriches ACs and adds tasks with a <b>verification check each</b>; Pass 4 infers dependencies, then a graph
+        walk <b>removes circular ones and names each</b>.
+      </div>
+
+      <div class="delta" style="background:var(--surface-2);border-color:var(--rule);border-left-color:var(--vf-anchor)">
+        <b style="color:var(--ink)">Each story arrives complete.</b> Acceptance criteria in ADO's <b style="color:var(--ink)">dedicated AC
+        field</b> rather than buried in the description; Fibonacci points; a backend/frontend/fullstack tag; and state, swimlane
+        and sprint all read live from <b style="color:var(--ink)">your</b> board and project tree.
+      </div>
+
+      <p class="prov">Counts are the worked example from the skill's own documentation, to show the fan-out — <b>not an
+      average</b>. Real volume follows your document's structure.</p>
+    </div>
+
+    <div class="panel">
+      <h2>Everything You Don't Do By Hand <span>and what it refuses to fake</span></h2>
+      <div class="adv">
+        <div class="ai"><div class="ic g">✓</div><p><b>Acceptance criteria that are actually testable.</b> Every AC is Given/When/Then and at least one per story is a <b>negative</b> case — invalid input, service down, limit exceeded. "The feature works correctly" is explicitly banned.</p></div>
+        <div class="ai"><div class="ic g">✓</div><p><b>It marks which ACs it invented.</b> Criteria evidenced in your document are flagged <code>derived</code>; gap-filling inferences are flagged as generated — so refinement knows what to scrutinise.</p></div>
+        <div class="ai"><div class="ic">→</div><p><b>Sprint planning that respects reality.</b> Dependent stories cluster, sort so prerequisites land earlier, then pack against backend/frontend/testing velocity. What will not fit is shown as <b>Overflow</b>, never crammed in.</p></div>
+        <div class="ai"><div class="ic">→</div><p><b>Dependencies inferred by rule.</b> Auth before protected endpoints, create before edit, backend before its paired frontend, schema before the APIs using it.</p></div>
+        <div class="ai"><div class="ic">→</div><p><b>Titles and sizing a PO can read.</b> Verb-object, present tense, 5–12 words — never a bare noun like "Bastion Integration". A 13-pointer arrives with "split this before committing".</p></div>
+        <div class="ai"><div class="ic">→</div><p><b>Three ways in, one shape out.</b> A spec or LLD, a plan-on-a-page, or a git branch diff — reading <code>.docx</code>, <code>.xlsx</code>, <code>.md</code>, <code>.txt</code> and Gherkin <code>.feature</code> directly, no conversion step.</p></div>
+        <div class="ai"><div class="ic a">−</div><p><b>It never touches what exists.</b> Only new items are created — no existing story, AC or estimate is modified. A strong first draft <b>for</b> refinement, not a replacement for it.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Guard rails & auto-correction ──────────────────────────────────── -->
+  <div class="pf">
+    <div class="pf-hd">
+      <span class="tag">The Differentiator</span>
+      <h2>Guard Rails &amp; Auto-Correction — it checks your board, then fixes its own mistakes</h2>
+      <span class="note">14 non-negotiable rules · PAT never echoed</span>
+    </div>
+
+    <div class="pf-grid">
+      <div class="pf-col">
+        <h3><span class="step">1</span>Nothing without consent</h3>
+        <ul>
+          <li>The <b>preview gate is absolute</b>: the full hierarchy, points, states, lanes and sprints are printed <b>before any write call</b>. No exceptions.</li>
+          <li>Four choices: create all, plan sprints first, <b>pick stories by number</b>, or cancel outright.</li>
+          <li>Your PAT is <b>never printed, logged or echoed</b> — not even in intermediate steps.</li>
+        </ul>
+        <div class="verdicts">
+          <span class="v ok">CREATE ALL</span><span class="v ok">SPRINT FIRST</span>
+          <span class="v no">SELECT 1,3,5</span><span class="v no">CANCEL</span>
+        </div>
+      </div>
+
+      <div class="pf-col">
+        <h3><span class="step">2</span>It reads your board</h3>
+        <ul>
+          <li>Swimlanes are <b>fetched from your board</b> and used <b>verbatim</b> — the field is case- and whitespace-sensitive, so typed text is never trusted.</li>
+          <li><b>Ready for Development</b> resolves to whatever state <i>your</i> board maps it to, not a hardcoded guess.</li>
+          <li>Sprints come from the <b>project iteration tree</b>, deliberately not team settings — those go stale.</li>
+          <li>State is set <b>before</b> lane; ADO silently drops the lane otherwise.</li>
+        </ul>
+      </div>
+
+      <div class="pf-col">
+        <h3><span class="step">3</span>It repairs its own writes</h3>
+        <ul>
+          <li>A <b>400 "field is Required"</b> is recoverable: it extracts the field name, <b>queries your area for a valid value</b>, and retries.</li>
+          <li>One value found → applied silently. Several → it <b>asks you once</b> for all items.</li>
+          <li>If the org rejects the batch API it falls back to <b>sequential creation</b>, rebuilding the hierarchy item by item and re-linking as it goes.</li>
+          <li>Only a failed retry skips an item — and it prints the <b>raw ADO error</b> so you can fix and re-run.</li>
+        </ul>
+      </div>
+
+      <div class="pf-col">
+        <h3><span class="step">4</span>Quality gates you can't skip</h3>
+        <ul>
+          <li><b>Fibonacci only</b> — 1, 2, 3, 5, 8, 13. Never 4, 6, 7 or 9–12, so estimates stay comparable across teams.</li>
+          <li><b>Three-dot git diff</b> (<code>base...HEAD</code>) — only what the branch introduced, not unrelated commits since the fork.</li>
+          <li>Long documents are <b>summarised heading-by-heading</b>, keeping requirement statements and dropping prose.</li>
+          <li>Dependency <b>cycles are broken before the preview</b>, with a warning naming each removed edge.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="failopen">
+      <b>It is built to be doubted — that is the point.</b> The preview gate means the worst outcome of a bad run is wasted
+      reading, never a polluted backlog. Inferred acceptance criteria are <b>labelled as inferred</b>, so nobody mistakes a
+      generated guess for a signed-off requirement. Overflow is surfaced rather than force-fitted, and existing work items are
+      never modified. <b>Every judgement it makes is shown to you, attributed, and reversible before a single item is created.</b>
+    </div>
+  </div>
+
+  <!-- ── Footer ─────────────────────────────────────────────────────────── -->
+  <div class="ftr">
+    <div class="road">
+      <span><b>1. Once</b> Create an ADO PAT — Work Items, Read &amp; Write</span>
+      <span><b>2. Run</b> /ado-story-creator &lt;folder&gt;</span>
+      <span><b>3. Answer</b> org, project, area, sprint, board URL</span>
+      <span><b>4. Review</b> the preview, then confirm</span>
+    </div>
+    <span class="brand">Vodafone UK Digital · Automation Engineering</span>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<title>ADO Journey Discovery — one-pager</title>
+<style>
+/* ─────────────────────────────────────────────────────────────────────────────
+   Vodafone UK palette. There is deliberately NO quantitative chart on this page:
+   the skill ships no worked example with scenario counts, so bar lengths would
+   have to be invented. The classification visual is a set of routing lanes —
+   qualitative, each carrying its own text label and chip, so identity is never
+   colour-alone (red = in scope, aqua = deferred, grey = out of scope).
+   Light/print target only.
+   ───────────────────────────────────────────────────────────────────────────── */
+:root{
+  --vf-red:#E60000;        /* Vodafone Red  — Table A / hero */
+  --vf-aqua:#00B0CA;       /* Vodafone Aqua — Table B */
+  --vf-anchor:#4A4D4E;     /* Anchor grey   — Table C */
+  --vf-green:#A8B400;      /* Spring Green  — status: good */
+  --vf-plum:#5E2750;       /* Aubergine     — code */
+
+  --ink:#1c1e1f;
+  --ink-2:#494c4d;
+  --ink-3:#7b7f81;
+  --surface:#ffffff;
+  --surface-2:#f6f6f4;
+  --surface-3:#ececea;
+  --rule:#dcdcd9;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+
+html,body{
+  font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+  color:var(--ink);background:var(--surface-3);
+  -webkit-font-smoothing:antialiased;
+}
+
+.page{
+  width:297mm;height:210mm;margin:8mm auto;padding:6.5mm 8mm 4.5mm;
+  background:var(--surface);display:flex;flex-direction:column;gap:2.5mm;
+  box-shadow:0 2px 18px rgba(0,0,0,.18);overflow:hidden;
+}
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+.hdr{flex:none;display:flex;align-items:flex-start;gap:4.2mm;padding-bottom:1.8mm;border-bottom:2.5px solid var(--vf-red)}
+.quote{flex:none;width:11.5mm;height:11.5mm;border-radius:50% 50% 50% 8%;background:var(--vf-red);position:relative}
+.quote::after{content:"";position:absolute;left:3mm;top:3mm;width:5.5mm;height:5.5mm;border-radius:50% 50% 50% 10%;background:#fff}
+.hdr-txt{flex:1;min-width:0}
+.hdr h1{font-size:16.4pt;font-weight:700;letter-spacing:-.35pt;line-height:1.03}
+.hdr h1 em{font-style:normal;color:var(--vf-red)}
+.hdr .sub{font-size:8.15pt;color:var(--ink-2);margin-top:.9mm;line-height:1.28}
+.hdr .sub b{color:var(--ink)}
+.hdr .sub code{font-family:Consolas,"Courier New",monospace;font-size:7.6pt;background:var(--surface-2);padding:.2mm .8mm;border-radius:2px;color:var(--vf-plum)}
+.pills{display:flex;flex-wrap:wrap;gap:1.2mm;margin-top:1.2mm}
+.pill{font-size:6.6pt;font-weight:700;letter-spacing:.3pt;text-transform:uppercase;padding:.7mm 2mm;border-radius:9px;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--rule)}
+.pill.hot{background:var(--vf-red);color:#fff;border-color:var(--vf-red)}
+.stamp{flex:none;text-align:right;font-size:6.8pt;color:var(--ink-3);line-height:1.45}
+.stamp b{display:block;font-size:11pt;color:var(--vf-red);letter-spacing:-.3pt;margin-bottom:.4mm}
+
+/* ── KPI tiles ────────────────────────────────────────────────────────────── */
+.kpis{flex:none;display:grid;grid-template-columns:repeat(5,1fr);gap:2.4mm}
+.kpi{background:var(--surface-2);border:1px solid var(--rule);border-top:2.5px solid var(--vf-red);border-radius:2px;padding:2mm 2.4mm 1.8mm}
+.kpi .n{font-size:16.5pt;font-weight:700;letter-spacing:-.6pt;line-height:1;color:var(--vf-red)}
+.kpi .n small{font-size:9pt;font-weight:700;letter-spacing:0}
+.kpi .l{font-size:7.1pt;font-weight:700;color:var(--ink);margin-top:1mm;line-height:1.2}
+.kpi .s{font-size:6.4pt;color:var(--ink-3);margin-top:.4mm;line-height:1.22}
+.kpi.alt{border-top-color:var(--vf-anchor)}
+.kpi.alt .n{color:var(--vf-anchor)}
+
+/* ── Mid grid ─────────────────────────────────────────────────────────────── */
+.mid{flex:none;display:grid;grid-template-columns:1.04fr 1fr;gap:3.2mm}
+.panel{border:1px solid var(--rule);border-radius:2px;padding:2.1mm 2.6mm;display:flex;flex-direction:column;min-width:0}
+.panel h2{font-size:7.9pt;font-weight:700;text-transform:uppercase;letter-spacing:.55pt;color:var(--ink);padding-bottom:1.1mm;margin-bottom:1.5mm;border-bottom:1px solid var(--rule);display:flex;align-items:baseline;gap:2mm}
+.panel h2 span{font-size:6.5pt;font-weight:600;letter-spacing:.2pt;color:var(--ink-3);text-transform:none;margin-left:auto}
+
+/* Pipeline strip */
+.flow{display:flex;gap:1.1mm;margin-bottom:1.9mm}
+.fstep{flex:1;background:var(--surface-2);border:1px solid var(--rule);border-radius:2px;padding:1.1mm 1.2mm;text-align:center}
+.fstep b{display:block;font-size:6.3pt;font-weight:700;color:var(--ink);line-height:1.15}
+.fstep i{font-style:normal;font-size:5.7pt;color:var(--ink-3);display:block;margin-top:.2mm}
+
+/* Classification lanes — qualitative routing, never quantitative bars */
+.lanes{display:flex;flex-direction:column;gap:1.5mm}
+.lane{display:grid;grid-template-columns:26mm 1fr;gap:2.2mm;align-items:start;
+      background:var(--surface-2);border:1px solid var(--rule);border-radius:2px;padding:1.5mm 1.9mm}
+.lane.a{border-left:2.5px solid var(--vf-red)}
+.lane.b{border-left:2.5px solid var(--vf-aqua)}
+.lane.c{border-left:2.5px solid var(--vf-anchor)}
+.lane .chip{font-size:6.2pt;font-weight:700;letter-spacing:.2pt;text-transform:uppercase;color:var(--ink);line-height:1.2}
+.lane .chip i{display:block;font-style:normal;font-size:5.8pt;font-weight:600;color:var(--ink-3);text-transform:none;letter-spacing:0;margin-top:.3mm}
+.lane p{font-size:6.6pt;line-height:1.27;color:var(--ink-2)}
+.lane p b{color:var(--ink)}
+
+.delta{margin-top:1.5mm;padding:1.3mm 2mm;background:#fff5f5;border:1px solid #f6cccc;border-left:2.5px solid var(--vf-red);border-radius:2px;font-size:6.85pt;color:var(--ink-2);line-height:1.27}
+.delta b{color:var(--vf-red)}
+.prov{margin-top:1.3mm;font-size:6.15pt;line-height:1.26;color:var(--ink-3)}
+.prov b{color:var(--ink-2)}
+
+/* Value list */
+.adv{display:flex;flex-direction:column;gap:1.25mm}
+.ai{display:grid;grid-template-columns:4.4mm 1fr;gap:1.5mm;align-items:start}
+.ai .ic{width:4.4mm;height:4.4mm;border-radius:50%;background:var(--vf-red);color:#fff;font-size:6.4pt;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:.15mm}
+.ai .ic.g{background:var(--vf-green)}
+.ai .ic.a{background:var(--vf-anchor)}
+.ai p{font-size:7.1pt;line-height:1.23;color:var(--ink-2)}
+.ai p b{color:var(--ink)}
+.ai p code{font-family:Consolas,"Courier New",monospace;font-size:6.2pt;background:var(--surface-2);padding:.1mm .6mm;border-radius:2px;color:var(--vf-plum)}
+
+/* ── Differentiator band ──────────────────────────────────────────────────── */
+.pf{flex:none;border:1px solid var(--rule);border-top:2.5px solid var(--vf-red);border-radius:2px;padding:2.4mm 2.8mm;background:var(--surface-2)}
+.pf-hd{display:flex;align-items:baseline;gap:2.4mm;margin-bottom:1.7mm}
+.pf-hd h2{font-size:8.3pt;font-weight:700;text-transform:uppercase;letter-spacing:.55pt}
+.pf-hd .tag{flex:none;font-size:6.3pt;font-weight:700;text-transform:uppercase;letter-spacing:.4pt;background:var(--vf-red);color:#fff;padding:.6mm 1.9mm;border-radius:8px}
+.pf-hd .note{margin-left:auto;font-size:6.6pt;color:var(--ink-3);font-weight:600;white-space:nowrap}
+.pf-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2.4mm}
+.pf-col{background:#fff;border:1px solid var(--rule);border-radius:2px;padding:2mm 2.2mm}
+.pf-col h3{font-size:6.9pt;font-weight:700;color:var(--ink);margin-bottom:1.2mm;display:flex;align-items:center;gap:1.4mm}
+.pf-col h3 .step{flex:none;width:4mm;height:4mm;border-radius:2px;background:var(--vf-red);color:#fff;font-size:6.2pt;display:flex;align-items:center;justify-content:center}
+.pf-col ul{list-style:none;display:flex;flex-direction:column;gap:.8mm}
+.pf-col li{font-size:6.55pt;line-height:1.28;color:var(--ink-2);padding-left:2.2mm;position:relative}
+.pf-col li::before{content:"";position:absolute;left:0;top:1.4mm;width:1.1mm;height:1.1mm;border-radius:50%;background:var(--vf-red)}
+.pf-col li b{color:var(--ink)}
+.pf-col code{font-family:Consolas,"Courier New",monospace;font-size:6pt;background:var(--surface-2);padding:.1mm .6mm;border-radius:2px;color:var(--vf-plum)}
+.verdicts{display:flex;flex-wrap:wrap;gap:.9mm;margin-top:1.3mm}
+.v{font-size:5.7pt;font-weight:700;letter-spacing:.2pt;padding:.45mm 1.2mm;border-radius:2px;border:1px solid}
+.v.ok{background:#f2f6e0;color:#5b6300;border-color:#d8e08f}
+.v.fix{background:#fff5f5;color:var(--vf-red);border-color:#f6cccc}
+.v.no{background:var(--surface-2);color:var(--ink-3);border-color:var(--rule)}
+.failopen{margin-top:1.7mm;padding:1.8mm 2.4mm;background:#fff;border:1px solid var(--rule);border-left:2.5px solid var(--vf-green);border-radius:2px;font-size:6.9pt;color:var(--ink-2);line-height:1.29}
+.failopen b{color:var(--ink)}
+.failopen code{font-family:Consolas,"Courier New",monospace;font-size:6.2pt;background:var(--surface-2);padding:.1mm .6mm;border-radius:2px;color:var(--vf-plum)}
+
+/* ── Footer ───────────────────────────────────────────────────────────────── */
+.ftr{flex:none;margin-top:auto;display:flex;align-items:center;gap:3mm;border-top:1px solid var(--rule);padding-top:1.7mm}
+.road{display:flex;flex:1;flex-wrap:nowrap}
+.road span{font-size:6.35pt;color:var(--ink-2);padding-right:2.1mm;margin-right:2.1mm;border-right:1px solid var(--rule);white-space:nowrap}
+.road span:last-child{border-right:none}
+.road span b{color:var(--vf-red)}
+.road code{font-family:Consolas,"Courier New",monospace;font-size:6.1pt;color:var(--vf-plum)}
+.ftr .brand{font-size:6.6pt;font-weight:700;color:var(--vf-red);white-space:nowrap}
+
+@media print{
+  @page{size:A4 landscape;margin:0}
+  html,body{background:#fff}
+  .page{margin:0;box-shadow:none;width:297mm;height:210mm}
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ── Header ─────────────────────────────────────────────────────────── -->
+  <div class="hdr">
+    <div class="quote"></div>
+    <div class="hdr-txt">
+      <h1>ADO Journey Discovery<br><em>It finds the scenarios nobody wrote down.</em></h1>
+      <p class="sub">
+        Point it at an epic. It walks the whole child and related hierarchy, reads every acceptance criterion, and
+        returns a <b>full E2E journey map</b> — analysis, three enumerated scenario tables, and a question list you can
+        hand straight to a product owner. <code>/ado-journey-discovery &lt;epic-id&gt;</code>. <b>Read-only: it never writes to ADO.</b>
+      </p>
+      <div class="pills">
+        <span class="pill hot">Nothing Dropped</span>
+        <span class="pill">Finds Implicit Gaps</span>
+        <span class="pill">Cross-Epic Memory</span>
+        <span class="pill">Read-Only</span>
+        <span class="pill">ADO Only — No Code</span>
+        <span class="pill">PO-Ready Questions</span>
+      </div>
+    </div>
+    <div class="stamp">
+      <b>Epic → Coverage</b>
+      PO · BA · Test Lead<br>
+      Delivery Manager<br>
+      Vodafone UK Digital
+    </div>
+  </div>
+
+  <!-- ── KPI tiles ──────────────────────────────────────────────────────── -->
+  <div class="kpis">
+    <div class="kpi">
+      <div class="n">5</div>
+      <div class="l">Deliverables per run</div>
+      <div class="s">Analysis, 3 scenario tables, questions</div>
+    </div>
+    <div class="kpi">
+      <div class="n">12</div>
+      <div class="l">Entity types harvested</div>
+      <div class="s">Plans, add-ons, vouchers, flags, bugs…</div>
+    </div>
+    <div class="kpi">
+      <div class="n">10<small>+</small></div>
+      <div class="l">Variation axes swept</div>
+      <div class="s">Tech, segment, tenure, channel, flags</div>
+    </div>
+    <div class="kpi">
+      <div class="n">0</div>
+      <div class="l">Scenarios silently dropped</div>
+      <div class="s">Every row lands in Table A, B or C</div>
+    </div>
+    <div class="kpi alt">
+      <div class="n">7</div>
+      <div class="l">Themed question sets</div>
+      <div class="s">Each one naming real plans and bug IDs</div>
+    </div>
+  </div>
+
+  <!-- ── Mid: classification + value ────────────────────────────────────── -->
+  <div class="mid">
+
+    <div class="panel">
+      <h2>Every Scenario Is Accounted For <span>classification is derived, not assumed</span></h2>
+
+      <div class="flow">
+        <div class="fstep"><b>Fetch</b><i>BFS, 4 deep</i></div>
+        <div class="fstep"><b>Analyse</b><i>9 sections</i></div>
+        <div class="fstep"><b>Enumerate</b><i>+ templates</i></div>
+        <div class="fstep"><b>Classify</b><i>3 rules</i></div>
+        <div class="fstep"><b>Ask</b><i>7 categories</i></div>
+      </div>
+
+      <div class="lanes">
+        <div class="lane a">
+          <div class="chip">Table A<i>In scope</i></div>
+          <p>An AC <b>directly covers</b> it, a live story delivers it, or it is a <b>logical implication</b> of an AC — "all four SKUs" becomes one row per SKU.</p>
+        </div>
+        <div class="lane b">
+          <div class="chip">Table B<i>Deferred</i></div>
+          <p>The covering story is Removed or Deferred, the ACs use deferral language ("future PI", "TBD"), <b>or no AC covers the row at all</b> — tagged <b>"No AC found"</b>. This is the conservative default.</p>
+        </div>
+        <div class="lane c">
+          <div class="chip">Table C<i>Out of scope</i></div>
+          <p>Explicitly excluded, matched against the epic's own out-of-scope list, or the covering story is Rejected. <b>The stated reason is printed in the row.</b></p>
+        </div>
+      </div>
+
+      <div class="delta">
+        <b>The default is a row, never silence.</b> A candidate with no AC and no exclusion reason <b>cannot be quietly
+        dropped</b> — and Sno runs as one continuous sequence across all three tables, so the set is provably complete.
+      </div>
+
+      <p class="prov">No counts shown: row volume is set by the epic's real scope, and the skill refuses to pad or truncate
+      to a round number. <b>Read-only by design</b> — the PAT needs only <b>Work Items (Read)</b>.</p>
+    </div>
+
+    <div class="panel">
+      <h2>What A Read-Through Misses <span>and this does not</span></h2>
+      <div class="adv">
+        <div class="ai"><div class="ic g">✓</div><p><b>It cross-multiplies to find the silence.</b> Every plan is checked against every add-on, bundle and discount found. Any combination the ACs neither confirm nor deny becomes a logged gap — <i>"12-month FWA plan + TV add-on: no AC addresses this"</i>.</p></div>
+        <div class="ai"><div class="ic g">✓</div><p><b>Absence itself is a finding.</b> A broadband epic that never mentions a TV add-on <b>anywhere</b> gets that silence raised as a question, rather than being read as "not applicable".</p></div>
+        <div class="ai"><div class="ic">→</div><p><b>It reads the implication, not just the sentence.</b> An AC saying "the 12-month plan appears first <i>for student routes</i>" proves a non-student route exists too — so both are enumerated, even though only one was written down.</p></div>
+        <div class="ai"><div class="ic">→</div><p><b>Memory that compounds across epics.</b> A vocabulary accumulates every plan, flag, voucher and bug, tagging each <code>recurring</code> or <code>new</code>. Anything known from a prior epic but <b>silent in this one</b> becomes a gap citing its source epic.</p></div>
+        <div class="ai"><div class="ic">→</div><p><b>Edge cases become reusable templates.</b> Net-new scenarios are abstracted into placeholder templates with trigger conditions, so the next epic with a voucher and a discount automatically re-enumerates the same bug-zone permutations.</p></div>
+        <div class="ai"><div class="ic a">−</div><p><b>Withdrawn text is not evidence.</b> Struck-through content in ADO descriptions and ACs is stripped before analysis, so retracted requirements never leak into the scenario set.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Differentiator band ────────────────────────────────────────────── -->
+  <div class="pf">
+    <div class="pf-hd">
+      <span class="tag">The Differentiator</span>
+      <h2>Zero-Loss Enumeration &amp; Cross-Epic Memory — the gaps are the deliverable</h2>
+      <span class="note">14 non-negotiable rules · PAT never echoed</span>
+    </div>
+
+    <div class="pf-grid">
+      <div class="pf-col">
+        <h3><span class="step">1</span>It finds everything first</h3>
+        <ul>
+          <li>Walks <code>relations[]</code> for children, related and dependency links, then runs a <b>recursive WIQL query to catch stragglers</b> the tree missed.</li>
+          <li>Breadth-first to <b>4 levels deep</b>, batching up to 200 IDs per call; a 404 or 401 on one item logs a warning and never halts the run.</li>
+          <li>Descriptions and ACs are de-HTMLed, entity-decoded and <b>withdrawn text removed</b> before a word is analysed.</li>
+        </ul>
+        <div class="verdicts">
+          <span class="v ok">TABLE A</span><span class="v fix">TABLE B</span>
+          <span class="v no">TABLE C</span><span class="v no">CONTINUOUS SNO</span>
+        </div>
+      </div>
+
+      <div class="pf-col">
+        <h3><span class="step">2</span>Nothing gets dropped</h3>
+        <ul>
+          <li>Three classification rules run in <b>priority order, first match wins</b> — out-of-scope, then in-scope, then deferred.</li>
+          <li>Ambiguous evidence resolves to <b>Table B, never Table A</b>. The tool will not promote a guess into "in scope".</li>
+          <li>Every row in Table B and C <b>carries its own reason in the Variation column</b>, so no classification is unexplained.</li>
+          <li>Row counts are never padded or truncated to look tidy.</li>
+        </ul>
+      </div>
+
+      <div class="pf-col">
+        <h3><span class="step">3</span>Memory across epics</h3>
+        <ul>
+          <li>One vocabulary per org and project, checked for <b>org/project mismatch</b> before it is trusted.</li>
+          <li><b>Additive by rule:</b> absence in a new epic means "not mentioned here", never "no longer true" — entries are never deleted, only mutable fields refreshed.</li>
+          <li>Recurring entities get a <b>cross-epic anchor</b>: "In epic X this behaved as Y — does the same apply here?"</li>
+          <li>Managed with <code>vocab show</code>, <code>clear</code> and <code>rebuild</code>; any run can opt out via <code>--no-vocab</code>.</li>
+        </ul>
+      </div>
+
+      <div class="pf-col">
+        <h3><span class="step">4</span>Questions you can send</h3>
+        <ul>
+          <li>Seven themed categories — bundles, plan ordering, discounts, out-of-scope rationale, open bugs, coverage gaps, analytics.</li>
+          <li>A category is <b>omitted entirely</b> when the epic has no matching entities. No empty headers, no filler.</li>
+          <li>Every question <b>names the real plan, bug ID, flag or segment</b>. The skill defines a question containing "the plan" as <b>a defect in its own output</b>.</li>
+          <li>Each one is answerable in a single factual reply — no compound questions.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="failopen">
+      <b>Conservative by construction — that is what makes it usable.</b> The output is an argument you can audit, not a verdict
+      you must trust: every row states why it landed where it did, ambiguity always falls to <b>Deferred</b> rather than being
+      talked up into scope, and unresolved gaps become named questions instead of being smoothed over. It reads ADO only — no
+      code, no tests, no Figma — so <b>the map reflects what the business wrote down, and the questions cover what it did not.</b>
+    </div>
+  </div>
+
+  <!-- ── Footer ─────────────────────────────────────────────────────────── -->
+  <div class="ftr">
+    <div class="road">
+      <span><b>1. Once</b> ADO PAT — Work Items, <b>Read</b> only</span>
+      <span><b>2. Run</b> <code>/ado-journey-discovery 3889235</code></span>
+      <span><b>3. Verify</b> <code>check</code> tests your PAT setup</span>
+      <span><b>4. Reuse</b> <code>vocab show | clear | rebuild</code></span>
+    </div>
+    <span class="brand">Vodafone UK Digital · Automation Engineering</span>
+  </div>
+
+</div>
+</body>
+</html>

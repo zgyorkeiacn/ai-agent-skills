@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<title>Defect Analysis — one-pager</title>
+<style>
+/* ─────────────────────────────────────────────────────────────────────────────
+   Vodafone UK palette. No quantitative chart: this skill publishes no measured
+   volume or accuracy data, so bar lengths would have to be invented. The visual
+   is a qualitative write-scope map of the tracker's columns — every cell carries
+   its own column letter and a legend entry, so identity is never colour-alone.
+   Data-bearing cells use dark-on-tint (≈7:1) rather than white-on-red (≈4:1).
+   Light/print target only.
+   ───────────────────────────────────────────────────────────────────────────── */
+:root{
+  --vf-red:#E60000;        /* Vodafone Red  — written / hero */
+  --vf-aqua:#00B0CA;       /* Vodafone Aqua — read */
+  --vf-anchor:#4A4D4E;     /* Anchor grey   — locked */
+  --vf-green:#A8B400;      /* Spring Green  — status: good */
+  --vf-plum:#5E2750;       /* Aubergine     — code */
+
+  --ink:#1c1e1f;
+  --ink-2:#494c4d;
+  --ink-3:#7b7f81;
+  --surface:#ffffff;
+  --surface-2:#f6f6f4;
+  --surface-3:#ececea;
+  --rule:#dcdcd9;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+
+html,body{
+  font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+  color:var(--ink);background:var(--surface-3);
+  -webkit-font-smoothing:antialiased;
+}
+
+.page{
+  width:297mm;height:210mm;margin:8mm auto;padding:6.5mm 8mm 4.5mm;
+  background:var(--surface);display:flex;flex-direction:column;gap:2.5mm;
+  box-shadow:0 2px 18px rgba(0,0,0,.18);overflow:hidden;
+}
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+.hdr{flex:none;display:flex;align-items:flex-start;gap:4.2mm;padding-bottom:1.8mm;border-bottom:2.5px solid var(--vf-red)}
+.quote{flex:none;width:11.5mm;height:11.5mm;border-radius:50% 50% 50% 8%;background:var(--vf-red);position:relative}
+.quote::after{content:"";position:absolute;left:3mm;top:3mm;width:5.5mm;height:5.5mm;border-radius:50% 50% 50% 10%;background:#fff}
+.hdr-txt{flex:1;min-width:0}
+.hdr h1{font-size:16.4pt;font-weight:700;letter-spacing:-.35pt;line-height:1.03}
+.hdr h1 em{font-style:normal;color:var(--vf-red)}
+.hdr .sub{font-size:8.15pt;color:var(--ink-2);margin-top:.9mm;line-height:1.28}
+.hdr .sub b{color:var(--ink)}
+.hdr .sub code{font-family:Consolas,"Courier New",monospace;font-size:7.6pt;background:var(--surface-2);padding:.2mm .8mm;border-radius:2px;color:var(--vf-plum)}
+.pills{display:flex;flex-wrap:wrap;gap:1.2mm;margin-top:1.2mm}
+.pill{font-size:6.6pt;font-weight:700;letter-spacing:.3pt;text-transform:uppercase;padding:.7mm 2mm;border-radius:9px;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--rule)}
+.pill.hot{background:var(--vf-red);color:#fff;border-color:var(--vf-red)}
+.stamp{flex:none;text-align:right;font-size:6.8pt;color:var(--ink-3);line-height:1.45}
+.stamp b{display:block;font-size:11pt;color:var(--vf-red);letter-spacing:-.3pt;margin-bottom:.4mm}
+
+/* ── KPI tiles ────────────────────────────────────────────────────────────── */
+.kpis{flex:none;display:grid;grid-template-columns:repeat(5,1fr);gap:2.4mm}
+.kpi{background:var(--surface-2);border:1px solid var(--rule);border-top:2.5px solid var(--vf-red);border-radius:2px;padding:2mm 2.4mm 1.8mm}
+.kpi .n{font-size:16.5pt;font-weight:700;letter-spacing:-.6pt;line-height:1;color:var(--vf-red)}
+.kpi .n small{font-size:9pt;font-weight:700;letter-spacing:0}
+.kpi .l{font-size:7.1pt;font-weight:700;color:var(--ink);margin-top:1mm;line-height:1.2}
+.kpi .s{font-size:6.4pt;color:var(--ink-3);margin-top:.4mm;line-height:1.22}
+.kpi.alt{border-top-color:var(--vf-anchor)}
+.kpi.alt .n{color:var(--vf-anchor)}
+
+/* ── Mid grid ─────────────────────────────────────────────────────────────── */
+.mid{flex:none;display:grid;grid-template-columns:1.04fr 1fr;gap:3.2mm}
+.panel{border:1px solid var(--rule);border-radius:2px;padding:2.1mm 2.6mm;display:flex;flex-direction:column;min-width:0}
+.panel h2{font-size:7.9pt;font-weight:700;text-transform:uppercase;letter-spacing:.55pt;color:var(--ink);padding-bottom:1.1mm;margin-bottom:1.5mm;border-bottom:1px solid var(--rule);display:flex;align-items:baseline;gap:2mm}
+.panel h2 span{font-size:6.5pt;font-weight:600;letter-spacing:.2pt;color:var(--ink-3);text-transform:none;margin-left:auto}
+
+/* Pipeline strip */
+.flow{display:flex;gap:.9mm;margin-bottom:2mm}
+.fstep{flex:1;background:var(--surface-2);border:1px solid var(--rule);border-radius:2px;padding:1.1mm .8mm;text-align:center;min-width:0}
+.fstep b{display:block;font-size:6.1pt;font-weight:700;color:var(--ink);line-height:1.14}
+.fstep i{font-style:normal;font-size:5.5pt;color:var(--ink-3);display:block;margin-top:.2mm;line-height:1.14}
+
+/* Column write-scope map — qualitative, letters + legend carry identity */
+.legend{display:flex;flex-wrap:wrap;gap:3mm;font-size:6.4pt;color:var(--ink-2);margin-bottom:1.4mm}
+.legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:1.2mm;vertical-align:-1px;border:1px solid}
+.cols{display:flex;gap:.7mm}
+.col{flex:1;text-align:center;border-radius:2px;padding:1.5mm 0 1.2mm;font-size:7pt;font-weight:700;border:1px solid;line-height:1}
+.col u{display:block;text-decoration:none;font-size:5.2pt;font-weight:600;margin-top:.5mm;line-height:1.05}
+.col.w{background:#fde2e2;color:#a30000;border-color:#f2b5b5}
+.col.r{background:#dcf1f5;color:#0c5561;border-color:#a8dde6}
+.col.lock{background:var(--surface-3);color:var(--ink-2);border-color:#c9c9c6}
+.col.n{background:var(--surface-2);color:#bfc2c3;border-color:var(--rule)}
+
+.delta{margin-top:1.8mm;padding:1.3mm 2mm;background:#fff5f5;border:1px solid #f6cccc;border-left:2.5px solid var(--vf-red);border-radius:2px;font-size:6.85pt;color:var(--ink-2);line-height:1.27}
+.delta b{color:var(--vf-red)}
+.delta code{font-family:Consolas,"Courier New",monospace;font-size:6.1pt;background:#fff;padding:.1mm .6mm;border-radius:2px;color:var(--vf-plum)}
+.prov{margin-top:1.3mm;font-size:6.15pt;line-height:1.26;color:var(--ink-3)}
+.prov b{color:var(--ink-2)}
+.prov code{font-family:Consolas,"Courier New",monospace;font-size:5.9pt;color:var(--vf-plum)}
+
+/* Value list */
+.adv{display:flex;flex-direction:column;gap:1.25mm}
+.ai{display:grid;grid-template-columns:4.4mm 1fr;gap:1.5mm;align-items:start}
+.ai .ic{width:4.4mm;height:4.4mm;border-radius:50%;background:var(--vf-red);color:#fff;font-size:6.4pt;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:.15mm}
+.ai .ic.g{background:var(--vf-green)}
+.ai .ic.a{background:var(--vf-anchor)}
+.ai p{font-size:7.1pt;line-height:1.23;color:var(--ink-2)}
+.ai p b{color:var(--ink)}
+.ai p code{font-family:Consolas,"Courier New",monospace;font-size:6.2pt;background:var(--surface-2);padding:.1mm .6mm;border-radius:2px;color:var(--vf-plum)}
+
+/* ── Differentiator band ──────────────────────────────────────────────────── */
+.pf{flex:none;border:1px solid var(--rule);border-top:2.5px solid var(--vf-red);border-radius:2px;padding:2.4mm 2.8mm;background:var(--surface-2)}
+.pf-hd{display:flex;align-items:baseline;gap:2.4mm;margin-bottom:1.7mm}
+.pf-hd h2{font-size:8.3pt;font-weight:700;text-transform:uppercase;letter-spacing:.55pt}
+.pf-hd .tag{flex:none;font-size:6.3pt;font-weight:700;text-transform:uppercase;letter-spacing:.4pt;background:var(--vf-red);color:#fff;padding:.6mm 1.9mm;border-radius:8px}
+.pf-hd .note{margin-left:auto;font-size:6.6pt;color:var(--ink-3);font-weight:600;white-space:nowrap}
+.pf-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2.4mm}
+.pf-col{background:#fff;border:1px solid var(--rule);border-radius:2px;padding:2mm 2.2mm}
+.pf-col h3{font-size:6.9pt;font-weight:700;color:var(--ink);margin-bottom:1.2mm;display:flex;align-items:center;gap:1.4mm}
+.pf-col h3 .step{flex:none;width:4mm;height:4mm;border-radius:2px;background:var(--vf-red);color:#fff;font-size:6.2pt;display:flex;align-items:center;justify-content:center}
+.pf-col ul{list-style:none;display:flex;flex-direction:column;gap:.8mm}
+.pf-col li{font-size:6.55pt;line-height:1.28;color:var(--ink-2);padding-left:2.2mm;position:relative}
+.pf-col li::before{content:"";position:absolute;left:0;top:1.4mm;width:1.1mm;height:1.1mm;border-radius:50%;background:var(--vf-red)}
+.pf-col li b{color:var(--ink)}
+.pf-col code{font-family:Consolas,"Courier New",monospace;font-size:6pt;background:var(--surface-2);padding:.1mm .6mm;border-radius:2px;color:var(--vf-plum)}
+.verdicts{display:flex;flex-wrap:wrap;gap:.9mm;margin-top:1.3mm}
+.v{font-size:5.7pt;font-weight:700;letter-spacing:.2pt;padding:.45mm 1.2mm;border-radius:2px;border:1px solid}
+.v.ok{background:#f2f6e0;color:#5b6300;border-color:#d8e08f}
+.v.fix{background:#fff5f5;color:var(--vf-red);border-color:#f6cccc}
+.v.no{background:var(--surface-2);color:var(--ink-3);border-color:var(--rule)}
+.failopen{margin-top:1.7mm;padding:1.8mm 2.4mm;background:#fff;border:1px solid var(--rule);border-left:2.5px solid var(--vf-green);border-radius:2px;font-size:6.9pt;color:var(--ink-2);line-height:1.29}
+.failopen b{color:var(--ink)}
+.failopen code{font-family:Consolas,"Courier New",monospace;font-size:6.2pt;background:var(--surface-2);padding:.1mm .6mm;border-radius:2px;color:var(--vf-plum)}
+
+/* ── Footer ───────────────────────────────────────────────────────────────── */
+.ftr{flex:none;margin-top:auto;display:flex;align-items:center;gap:3mm;border-top:1px solid var(--rule);padding-top:1.7mm}
+.road{display:flex;flex:1;flex-wrap:nowrap}
+.road span{font-size:6.35pt;color:var(--ink-2);padding-right:2.1mm;margin-right:2.1mm;border-right:1px solid var(--rule);white-space:nowrap}
+.road span:last-child{border-right:none}
+.road span b{color:var(--vf-red)}
+.road code{font-family:Consolas,"Courier New",monospace;font-size:6.1pt;color:var(--vf-plum)}
+.ftr .brand{font-size:6.6pt;font-weight:700;color:var(--vf-red);white-space:nowrap}
+
+@media print{
+  @page{size:A4 landscape;margin:0}
+  html,body{background:#fff}
+  .page{margin:0;box-shadow:none;width:297mm;height:210mm}
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ── Header ─────────────────────────────────────────────────────────── -->
+  <div class="hdr">
+    <div class="quote"></div>
+    <div class="hdr-txt">
+      <h1>Defect Analysis<br><em>It reads every comment, then makes the tracker and ADO agree.</em></h1>
+      <p class="sub">
+        Filters the eCare Defect Analysis Tracker to your PIs and your name, pulls each ticket <b>plus its full comment
+        thread</b> from ADO, derives the root cause from what people actually wrote, fills seven columns, then
+        <b>patches the RCA back into ADO with an audit comment</b>. <code>/defect-analysis</code> — configured once, reused after.
+      </p>
+      <div class="pills">
+        <span class="pill hot">Evidence-Led RCA</span>
+        <span class="pill">Two-Way Sync</span>
+        <span class="pill">Audit Trail</span>
+        <span class="pill">Column-Safe</span>
+        <span class="pill">Read-Only Check Mode</span>
+        <span class="pill">No Secrets On Disk</span>
+      </div>
+    </div>
+    <div class="stamp">
+      <b>Tickets → Tracker</b>
+      QA · Test Lead<br>
+      Delivery Manager<br>
+      Vodafone UK Digital
+    </div>
+  </div>
+
+  <!-- ── KPI tiles ──────────────────────────────────────────────────────── -->
+  <div class="kpis">
+    <div class="kpi">
+      <div class="n">7</div>
+      <div class="l">Columns filled per row</div>
+      <div class="s">From live ticket + comment evidence</div>
+    </div>
+    <div class="kpi">
+      <div class="n">2</div>
+      <div class="l">Columns never written</div>
+      <div class="s">K and M stay entirely yours</div>
+    </div>
+    <div class="kpi">
+      <div class="n">100<small>%</small></div>
+      <div class="l">Patches carry an audit comment</div>
+      <div class="s">Old value → new value, on the ticket</div>
+    </div>
+    <div class="kpi">
+      <div class="n">0</div>
+      <div class="l">Secrets written to disk</div>
+      <div class="s">PAT held in memory for the run only</div>
+    </div>
+    <div class="kpi alt">
+      <div class="n">8</div>
+      <div class="l">Bucket values, used verbatim</div>
+      <div class="s">Including the tracker's own typo</div>
+    </div>
+  </div>
+
+  <!-- ── Mid: write scope + decisions ───────────────────────────────────── -->
+  <div class="mid">
+
+    <div class="panel">
+      <h2>Exactly What It Touches <span>and what it will not</span></h2>
+
+      <div class="flow">
+        <div class="fstep"><b>Filter</b><i>PI + POC</i></div>
+        <div class="fstep"><b>Fetch</b><i>ticket + comments</i></div>
+        <div class="fstep"><b>Analyse</b><i>derive RCA</i></div>
+        <div class="fstep"><b>Write</b><i>7 columns</i></div>
+        <div class="fstep"><b>Patch</b><i>ADO + comment</i></div>
+        <div class="fstep"><b>Summarise</b><i>counts + errors</i></div>
+      </div>
+
+      <div class="legend">
+        <span><i style="background:#fde2e2;border-color:#f2b5b5"></i>Written</span>
+        <span><i style="background:#dcf1f5;border-color:#a8dde6"></i>Read only — filter or key</span>
+        <span><i style="background:#ececea;border-color:#c9c9c6"></i>Locked by rule</span>
+        <span><i style="background:#f6f6f4;border-color:#dcdcd9"></i>Untouched</span>
+      </div>
+
+      <div class="cols">
+        <div class="col r">A<u>PI</u></div>
+        <div class="col n">B<u>—</u></div>
+        <div class="col r">C<u>ID</u></div>
+        <div class="col r">D<u>Area</u></div>
+        <div class="col n">E<u>—</u></div>
+        <div class="col n">F<u>—</u></div>
+        <div class="col r">G<u>POC</u></div>
+        <div class="col w">H<u>RCA</u></div>
+        <div class="col w">I<u>Just.</u></div>
+        <div class="col w">J<u>FE/BE</u></div>
+        <div class="col lock">K<u>BDD</u></div>
+        <div class="col w">L<u>Other</u></div>
+        <div class="col lock">M<u>Shared</u></div>
+        <div class="col w">N<u>Res.</u></div>
+        <div class="col w">O<u>Bucket</u></div>
+        <div class="col w">P<u>Raised</u></div>
+      </div>
+
+      <div class="delta">
+        <b>Nothing changes without a trace.</b> Only tickets whose RCA <i>actually</i> changed get patched, and every patch is
+        followed by a comment on the ticket recording <code>'old' -&gt; 'new'</code>. Unmatched rows are never opened,
+        and <b>K and M are hard-blocked</b> — BDD Added and Shared With Team remain human-owned.
+      </div>
+
+      <p class="prov">No volume or accuracy figures are shown: the skill publishes none, and the row count depends entirely on
+      your PI and POC filter. <code>check</code> mode verifies the PAT and the Excel file and <b>writes to neither</b>.</p>
+    </div>
+
+    <div class="panel">
+      <h2>How It Decides <span>and what it refuses to invent</span></h2>
+      <div class="adv">
+        <div class="ai"><div class="ic g">✓</div><p><b>The root cause comes from the comment thread, not the title.</b> "Design gap" and "per figma" resolve to <b>Design gap</b>; "not in the AC" to <b>Requirement gap</b>; a breaking package bump or a TIL/UIM dependency to <b>External code issue</b>. It reads what the engineers actually wrote.</p></div>
+        <div class="ai"><div class="ic g">✓</div><p><b>It corrects the tracker, not just fills it.</b> Existing values are the starting point and are only overridden <b>on clear evidence</b>. Legacy labels are normalised — <code>Code Defect</code> becomes <code>Coding error</code>, and the ambiguous <code>Requirement/Design Gap</code> is resolved by whether the thread points at Figma or at an acceptance criterion.</p></div>
+        <div class="ai"><div class="ic">→</div><p><b>Justifications a reader can use.</b> Two to four plain sentences: what broke, why it happened, how it was resolved — drawn from the description, the comments and the resolve reason. No bullets, no ticket IDs dropped into the prose.</p></div>
+        <div class="ai"><div class="ic">→</div><p><b>Buckets follow the RCA.</b> A coding error defaults to <b>Valid Miss</b>; a requirement or design gap to <b>Reuirement Unclarity</b>. External packages and downstream teams get their own buckets rather than being lumped in as misses.</p></div>
+        <div class="ai"><div class="ic a">−</div><p><b>Silence stays silent.</b> "Other Action Taken" is left empty unless something concrete exists — a follow-up story, a downstream defect, a rollback, a PEN finding. And a ticket with no description is written up from its title with <b>"(no description available)"</b> stated outright.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Differentiator band ────────────────────────────────────────────── -->
+  <div class="pf">
+    <div class="pf-hd">
+      <span class="tag">The Differentiator</span>
+      <h2>Two-Way Sync With An Audit Trail — the spreadsheet stops disagreeing with ADO</h2>
+      <span class="note">7 non-negotiable rules · PAT never echoed</span>
+    </div>
+
+    <div class="pf-grid">
+      <div class="pf-col">
+        <h3><span class="step">1</span>Evidence, not guesswork</h3>
+        <ul>
+          <li>Per ticket it pulls <b>two endpoints</b> — the work item and its <b>full comment thread with authors</b>.</li>
+          <li>Harvests description, repro steps, state, tags, <b>who raised it, who resolved it and the resolve reason</b>, plus the existing ADO RCA field.</li>
+          <li>HTML is stripped and entity-decoded before analysis; fetches run in <b>batches of 10</b> and are cached so no ticket is pulled twice.</li>
+        </ul>
+        <div class="verdicts">
+          <span class="v fix">CODING ERROR</span><span class="v no">DESIGN GAP</span>
+          <span class="v no">REQUIREMENT GAP</span><span class="v no">EXTERNAL CODE</span>
+        </div>
+      </div>
+
+      <div class="pf-col">
+        <h3><span class="step">2</span>Overrides need proof</h3>
+        <ul>
+          <li>The existing Excel value is the <b>starting point</b>, not a blank slate — it is kept whenever no clear signal exists.</li>
+          <li>Normalisation is separated from judgement: relabelling <code>Code Defect</code> needs no analysis, resolving <code>Requirement/Design Gap</code> does.</li>
+          <li>FE / BE / BE-FE is inferred from tags and the actual symptom — UI, routing and accessibility to the front end; payloads, auth and logging to the back.</li>
+        </ul>
+      </div>
+
+      <div class="pf-col">
+        <h3><span class="step">3</span>Writes stay surgical</h3>
+        <ul>
+          <li><b>Seven columns, matched rows only.</b> Rows outside your PI and POC filter are never written.</li>
+          <li><b>K and M are never modified</b> — the two columns a human owns are structurally out of reach.</li>
+          <li>Bucket values are used <b>verbatim from the tracker's own list</b>, so filters and pivots keep working.</li>
+          <li>Only tickets whose RCA genuinely changed are patched; unchanged fields are never rewritten.</li>
+        </ul>
+      </div>
+
+      <div class="pf-col">
+        <h3><span class="step">4</span>Everything is traceable</h3>
+        <ul>
+          <li>Every ADO patch is <b>paired with a comment</b> naming the old and new value — the change explains itself on the ticket.</li>
+          <li>One console line per updated row and per patched ticket, each <b>OK or FAILED with the reason</b>.</li>
+          <li>A closing summary counts rows updated, tickets patched, a <b>breakdown per RCA category</b>, and lists any errors by ticket ID.</li>
+          <li>Generated scripts go to the scratchpad, <b>never into your project</b>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="failopen">
+      <b>It respects the system it found — typo and all.</b> The bucket list is used exactly as the tracker defines it, "Reuirement
+      Unclarity" included, because a tool that silently corrected that spelling would break every filter and pivot downstream: the
+      spreadsheet's vocabulary is the contract, not the tool's opinion. The same restraint runs throughout — the PAT is held in memory
+      and <b>never written to <code>config.json</code></b> or echoed, empty evidence produces an admission rather than invented prose,
+      and <code>check</code> confirms both ends are reachable while writing to neither. <b>Nothing is changed that cannot be explained
+      from the ticket it came from.</b>
+    </div>
+  </div>
+
+  <!-- ── Footer ─────────────────────────────────────────────────────────── -->
+  <div class="ftr">
+    <div class="road">
+      <span><b>1. First run</b> names, PIs, org/project, Excel path — saved</span>
+      <span><b>2. Verify</b> <code>check</code> — PAT + file, writes nothing</span>
+      <span><b>3. Run</b> <code>/defect-analysis</code></span>
+      <span><b>4. Re-point</b> <code>reset</code> — re-collect config</span>
+    </div>
+    <span class="brand">Vodafone UK Digital · Automation Engineering</span>
+  </div>
+
+</div>
+</body>
+</html>

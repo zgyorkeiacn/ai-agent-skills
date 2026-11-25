@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<title>Bug Triage — one-pager</title>
+<style>
+/* ─────────────────────────────────────────────────────────────────────────────
+   Vodafone UK palette. No quantitative chart: this skill ships no measured
+   throughput or accuracy data, so bar lengths would have to be invented. The
+   verdict visual is a pair of qualitative routing lanes, each carrying its own
+   text label and chip, so identity is never colour-alone (red = CODING,
+   aqua = TEST). Light/print target only.
+   ───────────────────────────────────────────────────────────────────────────── */
+:root{
+  --vf-red:#E60000;        /* Vodafone Red  — CODING / hero */
+  --vf-aqua:#00B0CA;       /* Vodafone Aqua — TEST */
+  --vf-anchor:#4A4D4E;     /* Anchor grey */
+  --vf-green:#A8B400;      /* Spring Green  — status: good */
+  --vf-plum:#5E2750;       /* Aubergine     — code */
+
+  --ink:#1c1e1f;
+  --ink-2:#494c4d;
+  --ink-3:#7b7f81;
+  --surface:#ffffff;
+  --surface-2:#f6f6f4;
+  --surface-3:#ececea;
+  --rule:#dcdcd9;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+
+html,body{
+  font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+  color:var(--ink);background:var(--surface-3);
+  -webkit-font-smoothing:antialiased;
+}
+
+.page{
+  width:297mm;height:210mm;margin:8mm auto;padding:6.5mm 8mm 4.5mm;
+  background:var(--surface);display:flex;flex-direction:column;gap:2.5mm;
+  box-shadow:0 2px 18px rgba(0,0,0,.18);overflow:hidden;
+}
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+.hdr{flex:none;display:flex;align-items:flex-start;gap:4.2mm;padding-bottom:1.8mm;border-bottom:2.5px solid var(--vf-red)}
+.quote{flex:none;width:11.5mm;height:11.5mm;border-radius:50% 50% 50% 8%;background:var(--vf-red);position:relative}
+.quote::after{content:"";position:absolute;left:3mm;top:3mm;width:5.5mm;height:5.5mm;border-radius:50% 50% 50% 10%;background:#fff}
+.hdr-txt{flex:1;min-width:0}
+.hdr h1{font-size:16.4pt;font-weight:700;letter-spacing:-.35pt;line-height:1.03}
+.hdr h1 em{font-style:normal;color:var(--vf-red)}
+.hdr .sub{font-size:8.15pt;color:var(--ink-2);margin-top:.9mm;line-height:1.28}
+.hdr .sub b{color:var(--ink)}
+.hdr .sub code{font-family:Consolas,"Courier New",monospace;font-size:7.6pt;background:var(--surface-2);padding:.2mm .8mm;border-radius:2px;color:var(--vf-plum)}
+.pills{display:flex;flex-wrap:wrap;gap:1.2mm;margin-top:1.2mm}
+.pill{font-size:6.6pt;font-weight:700;letter-spacing:.3pt;text-transform:uppercase;padding:.7mm 2mm;border-radius:9px;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--rule)}
+.pill.hot{background:var(--vf-red);color:#fff;border-color:var(--vf-red)}
+.stamp{flex:none;text-align:right;font-size:6.8pt;color:var(--ink-3);line-height:1.45}
+.stamp b{display:block;font-size:11pt;color:var(--vf-red);letter-spacing:-.3pt;margin-bottom:.4mm}
+
+/* ── KPI tiles ────────────────────────────────────────────────────────────── */
+.kpis{flex:none;display:grid;grid-template-columns:repeat(5,1fr);gap:2.4mm}
+.kpi{background:var(--surface-2);border:1px solid var(--rule);border-top:2.5px solid var(--vf-red);border-radius:2px;padding:2mm 2.4mm 1.8mm}
+.kpi .n{font-size:16.5pt;font-weight:700;letter-spacing:-.6pt;line-height:1;color:var(--vf-red)}
+.kpi .n small{font-size:9pt;font-weight:700;letter-spacing:0}
+.kpi .l{font-size:7.1pt;font-weight:700;color:var(--ink);margin-top:1mm;line-height:1.2}
+.kpi .s{font-size:6.4pt;color:var(--ink-3);margin-top:.4mm;line-height:1.22}
+.kpi.alt{border-top-color:var(--vf-anchor)}
+.kpi.alt .n{color:var(--vf-anchor)}
+
+/* ── Mid grid ─────────────────────────────────────────────────────────────── */
+.mid{flex:none;display:grid;grid-template-columns:1.04fr 1fr;gap:3.2mm}
+.panel{border:1px solid var(--rule);border-radius:2px;padding:2.1mm 2.6mm;display:flex;flex-direction:column;min-width:0}
+.panel h2{font-size:7.9pt;font-weight:700;text-transform:uppercase;letter-spacing:.55pt;color:var(--ink);padding-bottom:1.1mm;margin-bottom:1.5mm;border-bottom:1px solid var(--rule);display:flex;align-items:baseline;gap:2mm}
+.panel h2 span{font-size:6.5pt;font-weight:600;letter-spacing:.2pt;color:var(--ink-3);text-transform:none;margin-left:auto}
+
+/* Pipeline strip */
+.flow{display:flex;gap:.9mm;margin-bottom:1.9mm}
+.fstep{flex:1;background:var(--surface-2);border:1px solid var(--rule);border-radius:2px;padding:1.1mm .8mm;text-align:center;min-width:0}
+.fstep b{display:block;font-size:6.1pt;font-weight:700;color:var(--ink);line-height:1.14}
+.fstep i{font-style:normal;font-size:5.5pt;color:var(--ink-3);display:block;margin-top:.2mm;line-height:1.14}
+
+/* Verdict lanes — qualitative routing, never quantitative bars */
+.lanes{display:flex;flex-direction:column;gap:1.5mm}
+.lane{display:grid;grid-template-columns:24mm 1fr;gap:2.2mm;align-items:start;
+      background:var(--surface-2);border:1px solid var(--rule);border-radius:2px;padding:1.5mm 1.9mm}
+.lane.a{border-left:2.5px solid var(--vf-red)}
+.lane.b{border-left:2.5px solid var(--vf-aqua)}
+.lane .chip{font-size:6.6pt;font-weight:700;letter-spacing:.3pt;color:var(--ink);line-height:1.2}
+.lane .chip i{display:block;font-style:normal;font-size:5.8pt;font-weight:600;color:var(--ink-3);letter-spacing:0;margin-top:.4mm}
+.lane p{font-size:6.6pt;line-height:1.27;color:var(--ink-2)}
+.lane p b{color:var(--ink)}
+.lane p code{font-family:Consolas,"Courier New",monospace;font-size:6pt;background:#fff;padding:.1mm .6mm;border-radius:2px;color:var(--vf-plum)}
+
+.delta{margin-top:1.5mm;padding:1.3mm 2mm;background:#fff5f5;border:1px solid #f6cccc;border-left:2.5px solid var(--vf-red);border-radius:2px;font-size:6.85pt;color:var(--ink-2);line-height:1.27}
+.delta b{color:var(--vf-red)}
+.delta code{font-family:Consolas,"Courier New",monospace;font-size:6.1pt;background:#fff;padding:.1mm .6mm;border-radius:2px;color:var(--vf-plum)}
+.prov{margin-top:1.3mm;font-size:6.15pt;line-height:1.26;color:var(--ink-3)}
+.prov b{color:var(--ink-2)}
+.prov code{font-family:Consolas,"Courier New",monospace;font-size:5.9pt;color:var(--vf-plum)}
+
+/* Value list */
+.adv{display:flex;flex-direction:column;gap:1.25mm}
+.ai{display:grid;grid-template-columns:4.4mm 1fr;gap:1.5mm;align-items:start}
+.ai .ic{width:4.4mm;height:4.4mm;border-radius:50%;background:var(--vf-red);color:#fff;font-size:6.4pt;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:.15mm}
+.ai .ic.g{background:var(--vf-green)}
+.ai .ic.a{background:var(--vf-anchor)}
+.ai p{font-size:7.1pt;line-height:1.23;color:var(--ink-2)}
+.ai p b{color:var(--ink)}
+.ai p code{font-family:Consolas,"Courier New",monospace;font-size:6.2pt;background:var(--surface-2);padding:.1mm .6mm;border-radius:2px;color:var(--vf-plum)}
+
+/* ── Differentiator band ──────────────────────────────────────────────────── */
+.pf{flex:none;border:1px solid var(--rule);border-top:2.5px solid var(--vf-red);border-radius:2px;padding:2.4mm 2.8mm;background:var(--surface-2)}
+.pf-hd{display:flex;align-items:baseline;gap:2.4mm;margin-bottom:1.7mm}
+.pf-hd h2{font-size:8.3pt;font-weight:700;text-transform:uppercase;letter-spacing:.55pt}
+.pf-hd .tag{flex:none;font-size:6.3pt;font-weight:700;text-transform:uppercase;letter-spacing:.4pt;background:var(--vf-red);color:#fff;padding:.6mm 1.9mm;border-radius:8px}
+.pf-hd .note{margin-left:auto;font-size:6.6pt;color:var(--ink-3);font-weight:600;white-space:nowrap}
+.pf-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2.4mm}
+.pf-col{background:#fff;border:1px solid var(--rule);border-radius:2px;padding:2mm 2.2mm}
+.pf-col h3{font-size:6.9pt;font-weight:700;color:var(--ink);margin-bottom:1.2mm;display:flex;align-items:center;gap:1.4mm}
+.pf-col h3 .step{flex:none;width:4mm;height:4mm;border-radius:2px;background:var(--vf-red);color:#fff;font-size:6.2pt;display:flex;align-items:center;justify-content:center}
+.pf-col ul{list-style:none;display:flex;flex-direction:column;gap:.8mm}
+.pf-col li{font-size:6.55pt;line-height:1.28;color:var(--ink-2);padding-left:2.2mm;position:relative}
+.pf-col li::before{content:"";position:absolute;left:0;top:1.4mm;width:1.1mm;height:1.1mm;border-radius:50%;background:var(--vf-red)}
+.pf-col li b{color:var(--ink)}
+.pf-col code{font-family:Consolas,"Courier New",monospace;font-size:6pt;background:var(--surface-2);padding:.1mm .6mm;border-radius:2px;color:var(--vf-plum)}
+.verdicts{display:flex;flex-wrap:wrap;gap:.9mm;margin-top:1.3mm}
+.v{font-size:5.7pt;font-weight:700;letter-spacing:.2pt;padding:.45mm 1.2mm;border-radius:2px;border:1px solid}
+.v.ok{background:#f2f6e0;color:#5b6300;border-color:#d8e08f}
+.v.fix{background:#fff5f5;color:var(--vf-red);border-color:#f6cccc}
+.v.no{background:var(--surface-2);color:var(--ink-3);border-color:var(--rule)}
+.failopen{margin-top:1.7mm;padding:1.8mm 2.4mm;background:#fff;border:1px solid var(--rule);border-left:2.5px solid var(--vf-green);border-radius:2px;font-size:6.9pt;color:var(--ink-2);line-height:1.29}
+.failopen b{color:var(--ink)}
+.failopen code{font-family:Consolas,"Courier New",monospace;font-size:6.2pt;background:var(--surface-2);padding:.1mm .6mm;border-radius:2px;color:var(--vf-plum)}
+
+/* ── Footer ───────────────────────────────────────────────────────────────── */
+.ftr{flex:none;margin-top:auto;display:flex;align-items:center;gap:3mm;border-top:1px solid var(--rule);padding-top:1.7mm}
+.road{display:flex;flex:1;flex-wrap:nowrap}
+.road span{font-size:6.35pt;color:var(--ink-2);padding-right:2.1mm;margin-right:2.1mm;border-right:1px solid var(--rule);white-space:nowrap}
+.road span:last-child{border-right:none}
+.road span b{color:var(--vf-red)}
+.road code{font-family:Consolas,"Courier New",monospace;font-size:6.1pt;color:var(--vf-plum)}
+.ftr .brand{font-size:6.6pt;font-weight:700;color:var(--vf-red);white-space:nowrap}
+
+@media print{
+  @page{size:A4 landscape;margin:0}
+  html,body{background:#fff}
+  .page{margin:0;box-shadow:none;width:297mm;height:210mm}
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ── Header ─────────────────────────────────────────────────────────── -->
+  <div class="hdr">
+    <div class="quote"></div>
+    <div class="hdr-txt">
+      <h1>Bug Triage<br><em>It refuses to just make the test pass.</em></h1>
+      <p class="sub">
+        Paste a failing test, stack trace or build error. It reads the assertion, reads the real implementation behind it,
+        traces the mechanism, then rules <b>CODING</b> or <b>TEST</b> with evidence — and the verdict decides which file may
+        be touched. <code>/bug-triage &lt;log&gt;</code>. Language- and framework-agnostic, single repo or monorepo.
+      </p>
+      <div class="pills">
+        <span class="pill hot">Verdict First</span>
+        <span class="pill">Code vs Test</span>
+        <span class="pill">Evidence-Based</span>
+        <span class="pill">Read-Only Mode</span>
+        <span class="pill">Any Language</span>
+        <span class="pill">Defect Catalogue</span>
+      </div>
+    </div>
+    <div class="stamp">
+      <b>Red → Root Cause</b>
+      Dev · QA · Tech Lead<br>
+      Any stack, any repo<br>
+      Vodafone UK Digital
+    </div>
+  </div>
+
+  <!-- ── KPI tiles ──────────────────────────────────────────────────────── -->
+  <div class="kpis">
+    <div class="kpi">
+      <div class="n">2</div>
+      <div class="l">Verdicts, stated first</div>
+      <div class="s">CODING or TEST, with justification</div>
+    </div>
+    <div class="kpi">
+      <div class="n">7</div>
+      <div class="l">Steps of evidence first</div>
+      <div class="s">Before any verdict is offered</div>
+    </div>
+    <div class="kpi">
+      <div class="n">9</div>
+      <div class="l">Failure patterns pre-mapped</div>
+      <div class="s">Starting points, never blind lookups</div>
+    </div>
+    <div class="kpi">
+      <div class="n">0</div>
+      <div class="l">Defects hidden by a test edit</div>
+      <div class="s">CODING never touches the test file</div>
+    </div>
+    <div class="kpi alt">
+      <div class="n">4</div>
+      <div class="l">Modes</div>
+      <div class="s">analyze · check · fix · catalog</div>
+    </div>
+  </div>
+
+  <!-- ── Mid: verdict + traps ───────────────────────────────────────────── -->
+  <div class="mid">
+
+    <div class="panel">
+      <h2>Which Side Is Actually Wrong? <span>attribution, not a green test</span></h2>
+
+      <div class="flow">
+        <div class="fstep"><b>Parse</b><i>the log</i></div>
+        <div class="fstep"><b>Test</b><i>real assertion</i></div>
+        <div class="fstep"><b>Code</b><i>real impl</i></div>
+        <div class="fstep"><b>Trace</b><i>in → out</i></div>
+        <div class="fstep"><b>Verdict</b><i>+ why</i></div>
+        <div class="fstep"><b>Fix</b><i>one side</i></div>
+        <div class="fstep"><b>Log</b><i>if CODING</i></div>
+      </div>
+
+      <div class="lanes">
+        <div class="lane a">
+          <div class="chip">CODING<i>fix production</i></div>
+          <p>A wrong result on <b>valid, in-contract input</b>; a symbol that genuinely exists nowhere; a real logic bug. Edit the production file — <b>never the test</b>. And never fabricate a module just to satisfy an assertion.</p>
+        </div>
+        <div class="lane b">
+          <div class="chip">TEST<i>fix the test</i></div>
+          <p>The assertion is wrong or over-specified, or a mock's <b>path, export, signature or data shape</b> does not match reality. Edit the test — <b>never reword production</b> to satisfy a matcher.</p>
+        </div>
+      </div>
+
+      <div class="delta">
+        <b>The invariant test decides the hard ones.</b> Does the codebase actually <i>guarantee</i> the precondition that
+        makes the code correct? If it does, a fixture violating it is a <b>TEST</b> bug. If the code breaks on input its own
+        collaborators can legitimately produce — like a loader returning <code>[]</code> before init — it is <b>CODING</b>.
+      </div>
+
+      <p class="prov">No accuracy or throughput figures are shown: the skill publishes none, and inventing them would
+      undercut the point. <b>A TEST verdict can still carry a CODING gap</b> — if the test cites an acceptance criterion
+      that genuinely is not implemented, that part is reported separately. <code>check</code> mode writes nothing at all.</p>
+    </div>
+
+    <div class="panel">
+      <h2>The Traps It Catches <span>and why "just go green" is dangerous</span></h2>
+      <div class="adv">
+        <div class="ai"><div class="ic g">✓</div><p><b>The <code>[].every()</code> trap — a real catalogued defect.</b> A test asserted a zero-activity user had no achievements; it received <code>["all_complete"]</code>. Because <code>[].every(…)</code> is vacuously <b>true</b> and the loader legitimately returns <code>[]</code> before init, <b>every brand-new user was awarded the "completed everything" badge.</b> Verdict: CODING. Editing the test to expect the badge would have enshrined that bug permanently.</p></div>
+        <div class="ai"><div class="ic">→</div><p><b>Wording drift is a test bug, not a product bug.</b> The error says "timed out", the matcher wants <code>/timeout/</code> — that is an over-specified assertion. Relax the matcher; <b>do not reword production</b>. Unless the spec mandates the exact string, in which case the wording <i>is</i> the contract.</p></div>
+        <div class="ai"><div class="ic">→</div><p><b>Mocks that drifted from reality.</b> <code>anthropic</code> vs <code>@anthropic-ai/sdk</code>; <code>mockResolvedValue</code> on a synchronous function; a flat fixture where the code reads an envelope. It reads the <b>real collaborator</b> behind every mock to tell drift from defect.</p></div>
+        <div class="ai"><div class="ic">→</div><p><b>Tests that assume an architecture you never built.</b> A test expecting a separate router where the route is inline is retargeted — not answered by inventing the router.</p></div>
+        <div class="ai"><div class="ic a">−</div><p><b>Plausible is upgraded to confirmed.</b> Where it is cheap, a throwaway <b>non-destructive</b> repro proves both the failure and that the proposed fix removes it. No source in the repo? It classifies from the log and <b>says the confidence is reduced.</b></p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Differentiator band ────────────────────────────────────────────── -->
+  <div class="pf">
+    <div class="pf-hd">
+      <span class="tag">The Differentiator</span>
+      <h2>Correct Attribution — the verdict fixes the blast radius before anything is edited</h2>
+      <span class="note">7 non-negotiable rules · terse, evidence-led output</span>
+    </div>
+
+    <div class="pf-grid">
+      <div class="pf-col">
+        <h3><span class="step">1</span>Evidence before verdict</h3>
+        <ul>
+          <li>Reads the <b>exact assertion named in the log</b> — never a guess — plus its fixtures, mocks and <code>beforeEach</code>.</li>
+          <li>Resolves imports <b>against the real repo</b> and reads the genuine collaborator behind each mock: path, exports, sync/async, shape.</li>
+          <li>Walks the failing path <b>from input to asserted output</b>, naming the value that produced the error.</li>
+          <li>Notes <b>both</b> stack frames — test-side and deepest code-side — and resolves the owning package in a monorepo.</li>
+        </ul>
+        <div class="verdicts">
+          <span class="v fix">CODING</span><span class="v ok">TEST</span>
+          <span class="v no">TEST (LESSONS LEARNED)</span>
+        </div>
+      </div>
+
+      <div class="pf-col">
+        <h3><span class="step">2</span>Two decisive rules</h3>
+        <ul>
+          <li><b>The invariant test:</b> if the codebase guarantees the precondition, a fixture breaking it is the test's fault; if a collaborator can legitimately produce that input, the code must handle it.</li>
+          <li><b>Semantic equivalence:</b> when the <i>only</i> discrepancy is phrasing, it is over-specification — relax the matcher.</li>
+          <li>The exception is explicit: if a spec or AC <b>mandates the exact string</b>, that wording is part of the contract and the code is at fault.</li>
+        </ul>
+      </div>
+
+      <div class="pf-col">
+        <h3><span class="step">3</span>Blast radius is fixed</h3>
+        <ul>
+          <li><b>CODING → production file only.</b> The test is never edited to conceal a real defect.</li>
+          <li><b>TEST → test file only.</b> Production code and its error wording are never bent to satisfy an arbitrary assertion.</li>
+          <li>Always the <b>smallest change that resolves the root cause</b>, following the repo's own conventions.</li>
+          <li>Repros are <b>non-destructive</b>: scratch locations, and any real data file is backed up and restored byte-for-byte.</li>
+        </ul>
+      </div>
+
+      <div class="pf-col">
+        <h3><span class="step">4</span>A catalogue that compounds</h3>
+        <ul>
+          <li><b>CODING only, append-only.</b> Real defects accumulate into a durable, reviewable record of what actually broke.</li>
+          <li>It <b>reads the catalogue first</b> — to take the next entry number and to avoid duplicating the same test+error.</li>
+          <li>Portable: it adopts an existing or legacy log <b>before</b> creating a new one, so the record never fragments.</li>
+          <li>TEST verdicts are excluded, except an instructive trap kept and <b>visibly marked</b> "lessons learned".</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="failopen">
+      <b>It is allowed to tell you the test was right — that is the whole value.</b> Anything pointed at a red test will find some
+      way to make it green, and the cheapest route is editing the assertion — which is exactly how a real defect becomes permanent.
+      This inverts the incentive: the verdict comes <b>first</b>, with its justification, and only then is one side touched. Ambiguity
+      is settled by the invariant test on evidence, missing source is reported as <b>reduced confidence</b> rather than a confident
+      guess, and <code>check</code> writes nothing. <b>A green suite is the by-product; correct blame is the deliverable.</b>
+    </div>
+  </div>
+
+  <!-- ── Footer ─────────────────────────────────────────────────────────── -->
+  <div class="ftr">
+    <div class="road">
+      <span><b>1. Paste</b> <code>/bug-triage &lt;error log&gt;</code></span>
+      <span><b>2. Diagnose</b> <code>check</code> — read-only, writes nothing</span>
+      <span><b>3. Apply</b> <code>fix</code> — smallest correct change, then re-run</span>
+      <span><b>4. Review</b> <code>catalog</code> — locate the defect log</span>
+    </div>
+    <span class="brand">Vodafone UK Digital · Automation Engineering</span>
+  </div>
+
+</div>
+</body>
+</html>

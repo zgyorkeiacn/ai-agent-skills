@@ -58,3 +58,12 @@ Verification Command: Following any code generation, output the exact terminal c
 
 ## 8. Credential Storage & Secret Hygiene
 Never commit secrets, access keys, tokens, or passwords in plaintext. Store passwords encrypted at rest (AES-256-GCM; key derived at request time from a developer passphrase via Argon2id + a random salt). The passphrase is never stored; returning an exact password requires it. Hashing is one-way (verify-only) and cannot be reversed to reveal a password. Put other secrets in env vars or a secrets manager, never the repo (commit only `.env.example` placeholders). Test-user credentials are exempt unless the account is administrator-or-higher.
+
+## 9. Copyable Commands & Paths
+Every terminal command, and every file or folder path I have to paste somewhere else (a terminal, Explorer's address bar, a file dialog, another app), goes in its own fenced code block, so the block's copy button copies exactly that value. This includes the verification command of section 7.
+
+- **Inside the block:** only the value. No prompt sign, no comment, no prose.
+- **One block per paste:** commands run together in one terminal share one block; anything for a different window, or that needs a value filled in first (marked `<like-this>`), gets its own block.
+- **Label it:** on the line above each block, say where it goes (for example "In PowerShell:") and tag the block's language (`powershell`, `bash`, `text`).
+- **Paths:** files in the repository stay clickable links in the text; a path I must paste gets its block as well, absolute and in one piece.
+- **Inline code** is for names (a function, a flag, a setting), never for a value I am meant to copy.

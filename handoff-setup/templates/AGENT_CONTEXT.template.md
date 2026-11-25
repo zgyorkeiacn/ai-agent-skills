@@ -7,6 +7,8 @@
 
 ## What This Project Is
 
+<!-- Write short: bullets, about 1.5 KB per entry, no copied prompts, reports or git history. -->
+
 [One paragraph: what it does, what it produces, who uses it.]
 
 ---
